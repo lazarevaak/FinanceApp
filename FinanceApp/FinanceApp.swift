@@ -1,8 +1,13 @@
 import SwiftUI
 
+// MARK: - Entry Point
 @main
 struct FinanceApp: App {
+    // MARK: - Scene
     var body: some Scene {
-        WindowGroup {}
+        WindowGroup {
+            MainTabView()
+                .accentColor(Color("AccentColor")) 
+        }
     }
 }

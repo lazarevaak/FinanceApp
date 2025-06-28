@@ -5,7 +5,9 @@ final class CategoriesService {
     // MARK: - Data
     
     private let allCategories: [Category] = [
-        .init(id: 1, name: "Зарплата", emoji: "💰", isIncome: true)
+        .init(id: 1, name: "Зарплата", emoji: "💰", isIncome: true),
+        .init(id: 2, name: "Квартира", emoji: "🏠", isIncome: false),
+        .init(id: 3, name: "Продукты", emoji: "🍬", isIncome: false),
     ]
     
     // MARK: - Public Methods
