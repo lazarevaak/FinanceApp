@@ -1,10 +1,15 @@
 import SwiftUI
 
+// MARK: - HistoryView
 struct HistoryView: View {
     // MARK: - Properties
     let direction: Direction
     @StateObject private var vm: HistoryViewModel
     @Environment(\.presentationMode) private var presentationMode
+
+    // Persist selected currency
+    @AppStorage("selectedCurrency") private var storedCurrency: String = Currency.ruble.rawValue
+    private var currency: Currency { Currency(rawValue: storedCurrency) ?? .ruble }
 
     // MARK: - Init
     init(direction: Direction) {
@@ -60,7 +65,8 @@ struct HistoryView: View {
                             HStack {
                                 Text("Сумма")
                                 Spacer()
-                                Text(vm.totalFormatted)
+                                // Compute total and format
+                                Text(format(amount: vm.transactions.map(\.amount).reduce(0, +)))
                             }
                             .padding(.vertical, 10)
                         }
@@ -76,11 +82,14 @@ struct HistoryView: View {
                             .foregroundColor(.secondary)
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .padding(.horizontal)
+                            .padding(.horizontal, 8)
 
                         LazyVStack(spacing: 0) {
                             ForEach(vm.transactions) { tx in
-                                TransactionItemView(transaction: tx)
-                                Divider().padding(.leading, 16)
+                                TransactionRow(transaction: tx)
+                                    .padding(.horizontal, 8)
+                                    .padding(.vertical, 4)
+                                Divider().padding(.leading, 48)
                             }
                         }
                         .background(Color.white)
@@ -93,7 +102,6 @@ struct HistoryView: View {
             .navigationTitle("Моя история")
             .navigationBarTitleDisplayMode(.large)
             .toolbar {
-                // MARK: - Toolbar Items
                 ToolbarItem(placement: .navigationBarLeading) {
                     Button {
                         presentationMode.wrappedValue.dismiss()
@@ -154,5 +162,14 @@ struct HistoryView: View {
             }
         }
         .padding(.vertical, 6)
+    }
+
+    // MARK: - Amount Formatting
+    private func format(amount: Decimal) -> String {
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .currency
+        formatter.currencySymbol = currency.symbol
+        formatter.maximumFractionDigits = 0
+        return formatter.string(from: amount as NSDecimalNumber) ?? "0 \(currency.symbol)"
     }
 }

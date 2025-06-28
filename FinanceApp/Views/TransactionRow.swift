@@ -4,10 +4,11 @@ import SwiftUI
 struct TransactionRow: View {
     let transaction: Transaction
 
-    // MARK: - Body
+    @AppStorage("selectedCurrency") private var storedCurrency: String = Currency.ruble.rawValue
+    private var currency: Currency { Currency(rawValue: storedCurrency) ?? .ruble }
+
     var body: some View {
         HStack(spacing: 12) {
-            // MARK: - Emoji (only for outcome)
             if transaction.category.direction == .outcome {
                 Text("\(transaction.category.emoji)")
                     .font(.system(size: 12))
@@ -15,8 +16,6 @@ struct TransactionRow: View {
                     .background(Color.green.opacity(0.2))
                     .clipShape(Circle())
             }
-
-            // MARK: - Name & Comment
             VStack(alignment: .leading, spacing: 4) {
                 Text(transaction.category.name)
                     .font(.body)
@@ -26,16 +25,13 @@ struct TransactionRow: View {
                         .foregroundColor(.secondary)
                 }
             }
-
             Spacer()
-
-            // MARK: - Amount & Chevron
             HStack(spacing: 12) {
-                Text(formatAmount(transaction.amount))
+                Text(format(amount: transaction.amount))
                     .font(.body)
                 Image(systemName: "chevron.forward")
                     .font(.system(size: 14, weight: .semibold))
-                    .foregroundColor(Color("SecondaryColor"))
+                    .foregroundColor(Color("BackColor"))
                     .padding(.horizontal, 4)
             }
         }
@@ -43,12 +39,11 @@ struct TransactionRow: View {
         .padding(.horizontal, 8)
     }
 
-    // MARK: - Formatting Amount
-    private func formatAmount(_ amount: Decimal) -> String {
-        let fmt = NumberFormatter()
-        fmt.numberStyle = .currency
-        fmt.currencySymbol = "₽"
-        fmt.maximumFractionDigits = 0
-        return fmt.string(from: amount as NSDecimalNumber) ?? "0 ₽"
+    private func format(amount: Decimal) -> String {
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .currency
+        formatter.currencySymbol = currency.symbol
+        formatter.maximumFractionDigits = 0
+        return formatter.string(from: amount as NSDecimalNumber) ?? "0 \(currency.symbol)"
     }
 }
