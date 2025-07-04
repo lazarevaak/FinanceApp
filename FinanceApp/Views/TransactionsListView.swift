@@ -4,26 +4,24 @@ import SwiftUI
 struct TransactionsListView: View {
     let direction: Direction
 
-    // MARK: - State
     @StateObject private var vm = TransactionsListViewModel()
     @State private var isShowingHistory = false
 
-    // MARK: - Body
+    @AppStorage("selectedCurrency") private var storedCurrency: String = Currency.ruble.rawValue
+    private var currency: Currency { Currency(rawValue: storedCurrency) ?? .ruble }
+
     var body: some View {
         NavigationView {
             ZStack(alignment: .bottomTrailing) {
-                // MARK: - Background
                 Color(.systemGray6)
                     .ignoresSafeArea()
 
-                // MARK: - Scroll Content
                 ScrollView {
                     VStack(spacing: 0) {
-                        // MARK: - Total Section
                         HStack {
                             Text("Всего")
                             Spacer()
-                            Text(vm.totalFormatted(for: direction))
+                            Text(format(amount: totalAmount))
                         }
                         .padding(.vertical, 12)
                         .padding(.horizontal, 16)
@@ -33,7 +31,6 @@ struct TransactionsListView: View {
                         .padding(.horizontal)
                         .padding(.top, 16)
 
-                        // MARK: - Label
                         Text("ОПЕРАЦИИ")
                             .font(.system(size: 12))
                             .foregroundColor(.secondary)
@@ -42,11 +39,10 @@ struct TransactionsListView: View {
                             .padding(.vertical, 12)
                             .padding(.top, 8)
 
-                        // MARK: - Transactions List
                         LazyVStack(spacing: 0) {
                             ForEach(vm.transactions.filter { $0.category.direction == direction }) { tx in
                                 NavigationLink {
-                                    // TODO: Экран Pедактирования
+                                    // TODO: Edit screen
                                 } label: {
                                     TransactionRow(transaction: tx)
                                         .padding(.horizontal, 8)
@@ -55,8 +51,7 @@ struct TransactionsListView: View {
 
                                 Divider()
                                     .padding(.leading,
-                                             tx.category.direction == .outcome
-                                                ? 56 : 16)
+                                             tx.category.direction == .outcome ? 56 : 16)
                             }
                         }
                         .background(Color.white)
@@ -66,9 +61,8 @@ struct TransactionsListView: View {
                     }
                 }
 
-                // MARK: - Add Button
                 Button {
-                    // TODO: Переход на Экран "Мои Доходы/Расходы"
+                    // TODO: Add transaction
                 } label: {
                     Image(systemName: "plus")
                         .font(.system(size: 24))
@@ -76,8 +70,7 @@ struct TransactionsListView: View {
                         .padding()
                         .background(Color("AccentColor"))
                         .clipShape(Circle())
-                        .shadow(color: Color.black.opacity(0.2),
-                                radius: 6, x: 0, y: 4)
+                        .shadow(color: Color.black.opacity(0.2), radius: 6, x: 0, y: 4)
                 }
                 .padding(.trailing, 24)
                 .padding(.bottom, 24)
@@ -85,7 +78,6 @@ struct TransactionsListView: View {
             .navigationTitle(direction == .income ? "Доходы сегодня" : "Расходы сегодня")
             .navigationBarTitleDisplayMode(.large)
             .toolbar {
-                // MARK: - Toolbar
                 ToolbarItem(placement: .navigationBarTrailing) {
                     NavigationLink(
                         destination: HistoryView(direction: direction),
@@ -100,8 +92,25 @@ struct TransactionsListView: View {
             }
         }
         .task {
-            // MARK: - Fetch Transactions
             await vm.fetchTransactionsForToday()
         }
     }
+
+    // MARK: - Computed Properties
+    private var totalAmount: Decimal {
+        vm.transactions
+            .filter { $0.category.direction == direction }
+            .map(\.amount)
+            .reduce(0, +)
+    }
+
+    // MARK: - Amount Formatting
+    private func format(amount: Decimal) -> String {
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .currency
+        formatter.currencySymbol = currency.symbol
+        formatter.maximumFractionDigits = 0
+        return formatter.string(from: amount as NSDecimalNumber) ?? "0 \(currency.symbol)"
+    }
 }
+
