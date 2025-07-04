@@ -1,5 +1,6 @@
 import SwiftUI
 
+// MARK: - Account View
 struct AccountView: View {
     init() {
         UIScrollView.appearance().decelerationRate = .init(rawValue: 1.5)
@@ -19,7 +20,7 @@ struct AccountView: View {
                             .ignoresSafeArea(edges: .top)
                             .frame(height: 0)
 
-                        VStack(spacing: 24) {
+                        VStack(spacing: 8) {
                             HStack {
                                 Text("💰 Баланс")
                                     .fontWeight(.semibold)
@@ -100,7 +101,7 @@ struct AccountView: View {
 
                             Spacer(minLength: 20)
                         }
-                        .padding(.top, 16)
+                        .padding(.top, 8)
                         .gesture(
                             DragGesture().onChanged { _ in
                                 if vm.isEditing {
@@ -136,7 +137,7 @@ struct AccountView: View {
             .overlay(
                 ShakeDetectorView()
                     .allowsHitTesting(false)
-                    .id(vm.isEditing) // пересоздаём для активации UIResponder
+                    .id(vm.isEditing) 
             )
         }
 
