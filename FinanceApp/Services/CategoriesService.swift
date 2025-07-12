@@ -5,10 +5,17 @@ final class CategoriesService {
     // MARK: - Data
     
     private let allCategories: [Category] = [
-        .init(id: 1, name: "Зарплата", emoji: "💰", isIncome: true),
-        .init(id: 2, name: "Квартира", emoji: "🏠", isIncome: false),
-        .init(id: 3, name: "Продукты", emoji: "🍬", isIncome: false),
+        .init(id: 1, name: "Аренда квартиры", emoji: "🏠", isIncome: false),
+        .init(id: 2, name: "Одежда", emoji: "👕", isIncome: false),
+        .init(id: 3, name: "На собачку", emoji: "🐶", isIncome: false),
+        .init(id: 4, name: "Ремонт квартиры", emoji: "🔨", isIncome: false),
+        .init(id: 5, name: "Продукты", emoji: "🍏", isIncome: false),
+        .init(id: 6, name: "Спортзал", emoji: "🏋️", isIncome: false),
+        .init(id: 7, name: "Медицина", emoji: "💊", isIncome: false),
+        .init(id: 8, name: "Аптека", emoji: "🏥", isIncome: false),
+        .init(id: 9, name: "Машина", emoji: "🚗", isIncome: false),
     ]
+
     
     // MARK: - Public Methods
     

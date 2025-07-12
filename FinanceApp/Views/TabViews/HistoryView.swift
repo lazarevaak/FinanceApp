@@ -1,13 +1,12 @@
 import SwiftUI
 
-// MARK: - HistoryView
+// MARK: - History View
 struct HistoryView: View {
     // MARK: - Properties
     let direction: Direction
     @StateObject private var vm: HistoryViewModel
     @Environment(\.presentationMode) private var presentationMode
 
-    // Persist selected currency
     @AppStorage("selectedCurrency") private var storedCurrency: String = Currency.ruble.rawValue
     private var currency: Currency { Currency(rawValue: storedCurrency) ?? .ruble }
 
@@ -65,7 +64,6 @@ struct HistoryView: View {
                             HStack {
                                 Text("Сумма")
                                 Spacer()
-                                // Compute total and format
                                 Text(format(amount: vm.transactions.map(\.amount).reduce(0, +)))
                             }
                             .padding(.vertical, 10)
@@ -115,7 +113,7 @@ struct HistoryView: View {
                 }
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button {
-                        // future action
+                        
                     } label: {
                         Image("icon_trailing")
                             .renderingMode(.template)
