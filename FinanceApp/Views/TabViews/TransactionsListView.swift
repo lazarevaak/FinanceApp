@@ -29,23 +29,11 @@ struct TransactionsListView: View {
     var body: some View {
         NavigationView {
             ZStack(alignment: .bottomTrailing) {
-                Color(.systemGray6)
-                    .ignoresSafeArea()
+                Color(.systemGray6).ignoresSafeArea()
 
                 ScrollView {
                     VStack(spacing: 0) {
-                        HStack {
-                            Text("Всего")
-                            Spacer()
-                            Text(format(amount: totalAmount))
-                        }
-                        .padding(.vertical, 12)
-                        .padding(.horizontal, 16)
-                        .background(Color.white)
-                        .cornerRadius(12)
-                        .shadow(color: Color.black.opacity(0.05), radius: 4, x: 0, y: 2)
-                        .padding(.horizontal)
-                        .padding(.top, 16)
+                        totalAmountCard
 
                         Text("ОПЕРАЦИИ")
                             .font(.system(size: 12))
@@ -66,8 +54,7 @@ struct TransactionsListView: View {
                                 .buttonStyle(.plain)
 
                                 Divider()
-                                    .padding(.leading,
-                                             tx.category.direction == .outcome ? 56 : 16)
+                                    .padding(.leading, tx.category.direction == .outcome ? 56 : 16)
                             }
                         }
                         .background(Color.white)
@@ -76,20 +63,11 @@ struct TransactionsListView: View {
                         .padding(.bottom, 80)
                     }
                 }
-
-                Button {
-                    formMode = .create(direction: direction)
-                } label: {
-                    Image(systemName: "plus")
-                        .font(.system(size: 24))
-                        .foregroundColor(.white)
-                        .padding()
-                        .background(Color("AccentColor"))
-                        .clipShape(Circle())
-                        .shadow(color: Color.black.opacity(0.2), radius: 6, x: 0, y: 4)
+                .refreshable {
+                    vm.refresh()
                 }
-                .padding(.trailing, 24)
-                .padding(.bottom, 24)
+
+                addButton
             }
             .navigationTitle(direction == .income ? "Доходы сегодня" : "Расходы сегодня")
             .navigationBarTitleDisplayMode(.large)
@@ -108,10 +86,45 @@ struct TransactionsListView: View {
             .task {
                 await vm.fetchTransactionsForToday()
             }
-            .sheet(item: $formMode) { mode in
+            .sheet(item: $formMode, onDismiss: {
+                vm.refresh()
+            }) { mode in
                 TransactionFormView(mode: mode)
             }
         }
+    }
+
+    // MARK: — Вспомогательные View
+
+    private var totalAmountCard: some View {
+        HStack {
+            Text("Всего")
+            Spacer()
+            Text(format(amount: totalAmount))
+        }
+        .padding(.vertical, 12)
+        .padding(.horizontal, 16)
+        .background(Color.white)
+        .cornerRadius(12)
+        .shadow(color: Color.black.opacity(0.05), radius: 4, x: 0, y: 2)
+        .padding(.horizontal)
+        .padding(.top, 16)
+    }
+
+    private var addButton: some View {
+        Button {
+            formMode = .create(direction: direction)
+        } label: {
+            Image(systemName: "plus")
+                .font(.system(size: 24))
+                .foregroundColor(.white)
+                .padding()
+                .background(Color("AccentColor"))
+                .clipShape(Circle())
+                .shadow(color: Color.black.opacity(0.2), radius: 6, x: 0, y: 4)
+        }
+        .padding(.trailing, 24)
+        .padding(.bottom, 24)
     }
 
     // MARK: — Вспомогательные свойства
