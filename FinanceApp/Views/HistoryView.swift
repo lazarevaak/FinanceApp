@@ -1,6 +1,7 @@
 import SwiftUI
 
-// MARK: - History View
+// MARK: - HistoryView
+
 struct HistoryView: View {
     // MARK: - Properties
     let direction: Direction
@@ -20,7 +21,8 @@ struct HistoryView: View {
     var body: some View {
         NavigationView {
             ZStack {
-                Color(.systemGray6).ignoresSafeArea()
+                Color(.systemGroupedBackground).ignoresSafeArea()
+
                 ScrollView {
                     VStack(spacing: 16) {
                         // MARK: - Date Filter & Controls
@@ -105,25 +107,25 @@ struct HistoryView: View {
                         presentationMode.wrappedValue.dismiss()
                     } label: {
                         HStack(spacing: 4) {
-                            Image(systemName: "chevron.backward")
+                            Image(systemName: "chevron.left")
                             Text("Назад")
                         }
                         .foregroundColor(Color("IconColor"))
                     }
                 }
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button {
-                        
+                    NavigationLink {
+                        AnalysisViewControllerWrapper(direction: direction)
+                            .edgesIgnoringSafeArea(.top)
+                            .navigationBarBackButtonHidden(true)
                     } label: {
-                        Image("icon_trailing")
-                            .renderingMode(.template)
+                        Image(systemName: "doc")
                             .foregroundColor(Color("IconColor"))
                     }
                 }
             }
             .onAppear { Task { await vm.reload() } }
         }
-        .environment(\.locale, Locale(identifier: "ru"))
         .navigationBarBackButtonHidden(true)
         .interactiveDismissDisabled(true)
     }
@@ -137,10 +139,7 @@ struct HistoryView: View {
             ZStack {
                 Text(
                     date.wrappedValue,
-                    format: Date.FormatStyle()
-                        .day()
-                        .month(.wide)
-                        .year()
+                    format: Date.FormatStyle().day().month(.wide).year()
                 )
                 .font(.callout)
                 .foregroundColor(.primary)
@@ -162,12 +161,11 @@ struct HistoryView: View {
         .padding(.vertical, 6)
     }
 
-    // MARK: - Amount Formatting
     private func format(amount: Decimal) -> String {
         let formatter = NumberFormatter()
         formatter.numberStyle = .currency
         formatter.currencySymbol = currency.symbol
         formatter.maximumFractionDigits = 0
-        return formatter.string(from: amount as NSDecimalNumber) ?? "0 \(currency.symbol)"
+        return formatter.string(from: amount as NSDecimalNumber) ?? "0 \(currency.symbol)"
     }
 }
