@@ -1,7 +1,5 @@
 import SwiftUI
 
-// MARK: — Подвьюы
-
 struct CategoryRowView: View {
     @Binding var category: Category?
     @Binding var showPicker: Bool
@@ -160,8 +158,6 @@ struct DeleteSectionView: View {
     }
 }
 
-// MARK: — Выбор категории
-
 struct CategoryPickerView: View {
     @Binding var selected: Category?
     let categories: [Category]
@@ -187,8 +183,6 @@ struct CategoryPickerView: View {
     }
 }
 
-// MARK: — Главный экран формы
-
 struct TransactionFormView: View {
     @Environment(\.dismiss) private var dismiss
     @StateObject private var vm: TransactionFormViewModel
@@ -212,8 +206,10 @@ struct TransactionFormView: View {
 
         let internalMode: TransactionFormModeInternal = {
             switch mode {
-            case .create(let dir): return .create(direction: dir)
-            case .edit(let tx):    return .edit(transaction: tx)
+            case .create(let dir, let acc):
+                return .create(direction: dir, accountId: acc)
+            case .edit(let tx):
+                return .edit(transaction: tx)
             }
         }()
         _vm = StateObject(wrappedValue: .init(mode: internalMode))

@@ -1,73 +1,86 @@
 import SwiftUI
 
 struct MainTabView: View {
-    // MARK: - Initialization
-    init() {
-        let tabBarAppearance = UITabBarAppearance()
-        tabBarAppearance.configureWithOpaqueBackground()
-        tabBarAppearance.backgroundColor = .white
-        
-        UITabBar.appearance().standardAppearance = tabBarAppearance
-        UITabBar.appearance().scrollEdgeAppearance = tabBarAppearance
+    // MARK: - Dependencies
+    private let client: NetworkClient
+    private let accountService: BankAccountsService
+    private let initialAccountId: Int
+
+    // MARK: - State
+    @State private var accountId: Int?
+    @State private var isLoading: Bool = true
+    @State private var alertError: ErrorWrapper?
+
+    // MARK: - Init
+    init(client: NetworkClient, accountId: Int) {
+        self.client = client
+        self.initialAccountId = accountId
+        self.accountService = BankAccountsService(client: client)
+
+        let appearance = UITabBarAppearance()
+        appearance.configureWithOpaqueBackground()
+        appearance.backgroundColor = UIColor.white
+        UITabBar.appearance().standardAppearance = appearance
+        UITabBar.appearance().scrollEdgeAppearance = appearance
     }
-    
+
     // MARK: - Body
     var body: some View {
-        TabView {
-            // MARK: - Outcome Tab
-            TransactionsListView(direction: .outcome)
-                .tabItem {
-                    Label {
-                        Text("Расходы")
-                    } icon: {
-                        Image("tab_outcome")
-                            .renderingMode(.template)
-                    }
-                }
+        Group {
+            if let accountId = accountId {
+                TabView {
+                    TransactionsListView(direction: .outcome,
+                                         client: client,
+                                         accountId: accountId)
+                        .tabItem {
+                            Image("tab_outcome")
+                                .renderingMode(.template)
+                            Text("Расходы")
+                        }
 
-            // MARK: - Income Tab
-            TransactionsListView(direction: .income)
-                .tabItem {
-                    Label {
-                        Text("Доходы")
-                    } icon: {
-                        Image("tab_income")
-                            .renderingMode(.template)
-                    }
-                }
+                    TransactionsListView(direction: .income,
+                                         client: client,
+                                         accountId: accountId)
+                        .tabItem {
+                            Image("tab_income")
+                                .renderingMode(.template)
+                            Text("Доходы")
+                        }
 
-            // MARK: - Account Tab
-            AccountView()
-                .tabItem {
-                    Label {
-                        Text("Счет")
-                    } icon: {
-                        Image("tab_account")
-                            .renderingMode(.template)
-                    }
-                }
+                    AccountView(client: client)
+                        .tabItem {
+                            Image("tab_account")
+                                .renderingMode(.template)
+                            Text("Счет")
+                        }
 
-            // MARK: - Categories Tab
-            CategoriesView()
-                .tabItem {
-                    Label {
-                        Text("Статьи")
-                    } icon: {
-                        Image("tab_categories")
-                            .renderingMode(.template)
-                    }
-                }
+                    CategoriesView()
+                        .tabItem {
+                            Image("tab_categories")
+                                .renderingMode(.template)
+                            Text("Статьи")
+                        }
 
-            // MARK: - Settings Tab
-            SettingsView()
-                .tabItem {
-                    Label {
-                        Text("Настройки")
-                    } icon: {
-                        Image("tab_settings")
-                            .renderingMode(.template)
-                    }
+                    SettingsView()
+                        .tabItem {
+                            Image("tab_settings")
+                                .renderingMode(.template)
+                            Text("Настройки")
+                        }
                 }
+            }
+        }
+        .loading(isLoading, text: "Загрузка счёта…")
+        .errorAlert(errorWrapper: $alertError)
+        .task {
+            isLoading = true
+            do {
+                let account = try await accountService.getAccount(withId: initialAccountId)
+                accountId = account.id
+            } catch {
+                alertError = ErrorWrapper(message: error.localizedDescription)
+            }
+            isLoading = false
         }
     }
 }

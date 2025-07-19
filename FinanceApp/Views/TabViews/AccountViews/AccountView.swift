@@ -1,215 +1,164 @@
 import SwiftUI
+import UIKit
 
-// MARK: - Account View
+extension Notification.Name {
+    static let operationsDidChange = Notification.Name("operationsDidChange")
+}
+
 struct AccountView: View {
-    init() {
-        UIScrollView.appearance().decelerationRate = .init(rawValue: 1.5)
+    let client: NetworkClient
+
+    @StateObject private var vm: AccountViewModel
+    @FocusState private var isFocused: Bool
+    @State private var showCurrencyDialog = false
+    @State private var hideBalance = true
+
+    init(client: NetworkClient) {
+        self.client = client
+        _vm = StateObject(wrappedValue: AccountViewModel(client: client))
     }
 
-    @StateObject private var vm = AccountViewModel()
-    @FocusState private var isFocused: Bool
-    @AppStorage("spoilerIsOn") private var spoilerIsOn: Bool = true
-    @State private var balanceWidth: CGFloat = 0
-
     var body: some View {
-        ZStack {
-            NavigationView {
-                ZStack {
-                    ScrollView {
-                        Color(.systemGray6)
-                            .ignoresSafeArea(edges: .top)
-                            .frame(height: 0)
+        NavigationView {
+            VStack(spacing: 16) {
+                Text("Мой счёт")
+                    .font(.largeTitle.bold())
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 16)
 
-                        VStack(spacing: 8) {
-                            HStack {
-                                Text("💰 Баланс")
-                                    .fontWeight(.semibold)
-                                Spacer()
-
-                                if vm.isEditing {
-                                    HStack(spacing: 4) {
-                                        TextField("0.00", text: $vm.balanceText)
-                                            .keyboardType(.decimalPad)
-                                            .focused($isFocused)
-                                            .multilineTextAlignment(.trailing)
-                                            .onReceive(vm.$balanceText) { newValue in
-                                                let filtered = newValue.filter { "0123456789.".contains($0) }
-                                                if filtered != newValue { vm.balanceText = filtered }
-                                            }
-
-                                        Button {
-                                            vm.pasteBalanceFromClipboard()
-                                        } label: {
-                                            Image(systemName: "doc.on.clipboard")
-                                                .foregroundColor(.gray)
-                                        }
-                                    }
-                                } else if let value = Decimal(string: vm.balanceText) {
-                                    ZStack(alignment: .trailing) {
-                                        Text("\(value, format: .number) \(vm.currency.symbol)")
-                                            .opacity(spoilerIsOn ? 0 : 1)
-                                            .background(
-                                                GeometryReader { geo in
-                                                    Color.clear
-                                                        .onAppear {
-                                                            balanceWidth = geo.size.width
-                                                        }
-                                                }
-                                            )
-
-                                        if spoilerIsOn {
-                                            SpoilerView(isOn: true)
-                                                .frame(width: balanceWidth, height: 20)
-                                        }
-                                    }
-                                    .onChange(of: vm.balanceText) { _ in
-                                        balanceWidth = 0
-                                    }
-                                } else {
-                                    Text("— \(vm.currency.symbol)")
-                                }
-                            }
-                            .padding()
-                            .background(vm.isEditing ? Color.white : Color("AccentColor"))
-                            .cornerRadius(12)
-                            .padding(.horizontal)
-                            .onTapGesture {
-                                if vm.isEditing { isFocused = true }
-                            }
-
-                            HStack {
-                                Text("Валюта")
-                                Spacer()
-                                Text(vm.currency.symbol)
-                                    .foregroundColor(.gray)
-
-                                if vm.isEditing {
-                                    Image(systemName: "chevron.right")
-                                        .foregroundColor(.secondary)
-                                }
-                            }
-                            .padding()
-                            .background(vm.isEditing ? Color.white : Color("AccentColor").opacity(0.3))
-                            .cornerRadius(12)
-                            .padding(.horizontal)
-                            .contentShape(Rectangle())
+                ScrollView {
+                    VStack(spacing: 8) {
+                        balanceRow
+                        currencyRow
                             .onTapGesture {
                                 if vm.isEditing {
-                                    vm.showCurrencyPicker = true
+                                    showCurrencyDialog = true
                                 }
                             }
-
-                            Spacer(minLength: 20)
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.top, 16)
+                }
+                .refreshable { await vm.loadAccount() }
+            }
+            .background(Color(.systemGroupedBackground).ignoresSafeArea())
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button(vm.isEditing ? "Сохранить" : "Редактировать") {
+                        if vm.isEditing {
+                            UIApplication.shared.sendAction(
+                                #selector(UIResponder.resignFirstResponder),
+                                to: nil, from: nil, for: nil
+                            )
+                            hideBalance = true
                         }
-                        .padding(.top, 8)
-                        .gesture(
-                            DragGesture().onChanged { _ in
-                                if vm.isEditing {
-                                    vm.hideKeyboard()
-                                }
-                            }
-                        )
+                        vm.toggleEditing()
+                        isFocused = false
                     }
-                    .background(Color(.systemGray6))
-                    .refreshable {
-                        await vm.load()
-                    }
-                    .navigationTitle("Мой счёт")
-                    .navigationBarTitleDisplayMode(.large)
-                    .toolbar {
-                        ToolbarItem(placement: .navigationBarTrailing) {
-                            Button(vm.isEditing ? "Сохранить" : "Редактировать") {
-                                if vm.isEditing {
-                                    Task { await vm.save() }
-                                } else {
-                                    vm.isEditing = true
-                                }
-                            }
-                            .font(.system(size: 18, weight: .regular))
-                            .foregroundColor(Color("IconColor"))
-                        }
-                    }
-
-                    currencyPicker
+                    .foregroundColor(Color(.black))
                 }
             }
-
+            .confirmationDialog("Валюта", isPresented: $showCurrencyDialog, titleVisibility: .visible) {
+                ForEach(Currency.allCases) { cur in
+                    Button(cur.displayName) {
+                        vm.selectedCurrency = cur
+                    }
+                    .foregroundColor(Color(.black))
+                }
+            }
+            .tint(Color(.black))
+            .gesture(
+                DragGesture().onChanged { _ in
+                    UIApplication.shared.sendAction(
+                        #selector(UIResponder.resignFirstResponder),
+                        to: nil, from: nil, for: nil
+                    )
+                }
+            )
+            .onReceive(NotificationCenter.default.publisher(for: .deviceDidShake)) { _ in
+                withAnimation { hideBalance.toggle() }
+            }
             .overlay(
                 ShakeDetectorView()
                     .allowsHitTesting(false)
-                    .id(vm.isEditing) 
+                    .id(vm.isEditing)
             )
         }
-
-        .onReceive(NotificationCenter.default.publisher(for: .deviceDidShake)) { _ in
-            withAnimation {
-                spoilerIsOn.toggle()
-            }
+        .onChange(of: vm.isEditing) { _, editing in
+            if !editing { hideBalance = true }
+        }
+        .alert("Ошибка", isPresented: Binding(get: {
+            vm.error != nil
+        }, set: { _ in
+            vm.error = nil
+        })) {
+            Button("Ок", role: .cancel) {}
+        } message: {
+            Text(vm.error?.localizedDescription ?? "Неизвестная ошибка")
+        }
+        .onAppear {
+            Task { await vm.loadAccount() }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .operationsDidChange)) { _ in
+            Task { await vm.loadAccount() }
         }
     }
 
-    // MARK: — Валюта
-    @ViewBuilder private var currencyPicker: some View {
-        if vm.showCurrencyPicker {
-            Color.black.opacity(0.3)
-                .ignoresSafeArea()
-                .onTapGesture { vm.showCurrencyPicker = false }
+    // MARK: Balance Row
+    private var balanceRow: some View {
+        HStack {
+            Text("💰 Баланс")
+            Spacer()
 
-            GeometryReader { proxy in
-                VStack {
-                    Spacer()
-                    VStack(spacing: 0) {
-                        Text("Валюта")
-                            .font(.headline)
-                            .padding(.vertical, 16)
-
-                        Divider()
-
-                        ForEach(Currency.allCases) { cur in
-                            Button {
-                                vm.select(cur)
-                                vm.showCurrencyPicker = false
-                            } label: {
-                                Text(cur.displayName)
-                                    .frame(maxWidth: .infinity)
-                                    .padding(.vertical, 12)
-                                    .foregroundColor(Color("IconColor"))
-                            }
-
-                            if cur != Currency.allCases.last {
-                                Divider()
-                            }
-                        }
+            if vm.isEditing {
+                TextField("", text: $vm.balanceInput)
+                    .keyboardType(.decimalPad)
+                    .multilineTextAlignment(.trailing)
+                    .focused($isFocused)
+                    .onChange(of: vm.balanceInput) { _, new in
+                        vm.balanceInput = vm.sanitize(new)
                     }
-                    .background(Color(.systemBackground))
-                    .cornerRadius(16, corners: [.topLeft, .topRight])
-                    .padding(.horizontal, 12)
-                    .padding(.bottom, proxy.safeAreaInsets.bottom)
-                }
-                .ignoresSafeArea()
+            } else {
+                Text(vm.account?.balance.formatted(
+                    .currency(code: vm.selectedCurrency.rawValue)
+                        .locale(Locale(identifier: "ru_RU"))
+                        .precision(.fractionLength(0))
+                ) ?? "—")
+                .foregroundColor(.black)
+                .spoiler(isOn: $hideBalance)
             }
-            .transition(.move(edge: .bottom))
-            .animation(.easeOut, value: vm.showCurrencyPicker)
         }
-    }
-}
-
-// MARK: — Rounded Corner
-extension View {
-    func cornerRadius(_ radius: CGFloat, corners: UIRectCorner) -> some View {
-        clipShape(RoundedCorner(radius: radius, corners: corners))
-    }
-}
-
-struct RoundedCorner: Shape {
-    var radius: CGFloat
-    var corners: UIRectCorner
-
-    func path(in rect: CGRect) -> Path {
-        Path(
-            UIBezierPath(roundedRect: rect,
-                         byRoundingCorners: corners,
-                         cornerRadii: CGSize(width: radius, height: radius)).cgPath
+        .padding(12)
+        .frame(maxWidth: .infinity)
+        .background(
+            vm.isEditing ? Color(.systemBackground) : Color.accentColor
         )
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .contentShape(Rectangle())
+        .onTapGesture { if vm.isEditing { isFocused = true } }
+    }
+
+    // MARK: Currency Row
+    private var currencyRow: some View {
+        HStack {
+            Text("Валюта")
+            Spacer()
+            Text(vm.selectedCurrency.symbol)
+                .foregroundColor(vm.isEditing ? Color(.black) : .primary)
+
+            if vm.isEditing {
+                Image(systemName: "chevron.right")
+                    .foregroundColor(.gray)
+            }
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity)
+        .background(
+            vm.isEditing
+            ? Color(.systemBackground)
+            : Color.accentColor.opacity(0.20)
+        )
+        .clipShape(RoundedRectangle(cornerRadius: 12))
     }
 }

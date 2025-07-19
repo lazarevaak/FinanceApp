@@ -1,6 +1,6 @@
 import UIKit
 
-// MARK: — Модель валют
+// MARK: — Currency Model
 enum Currency: String, CaseIterable, Identifiable {
     case ruble  = "RUB"
     case dollar = "USD"

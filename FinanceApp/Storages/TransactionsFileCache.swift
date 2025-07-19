@@ -1,61 +1,41 @@
 import Foundation
 
 final class TransactionsFileCache {
-    
-    // MARK: - Properties
-    
-    private var transactions: [Transaction] = []
-    var allTransactions: [Transaction] { transactions }
-    
-    private let fileURL: URL
-    
-    private enum FileCacheError: Error {
-        case invalidFormat
+
+    // MARK: - Storage
+    private(set) var transactions: [Transaction] = []
+
+    // MARK: CRUD
+    func add(_ tx: Transaction) { guard !transactions.contains(where: { $0.id == tx.id }) else { return }; transactions.append(tx) }
+    func remove(withId id: Int) { transactions.removeAll { $0.id == id } }
+    func replaceAll(_ all: [Transaction]) { transactions = all }
+
+    // MARK: Save
+    func save(to url: URL) throws {
+        let enc = JSONEncoder()
+        enc.outputFormatting = [.prettyPrinted, .withoutEscapingSlashes]
+        enc.dateEncodingStrategy = .iso8601
+        try enc.encode(transactions).write(to: url, options: .atomic)
     }
-    
-    // MARK: - Init
-    
-    init(filename: String = "transactions.json") {
-        let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
-        self.fileURL = docs.appendingPathComponent(filename)
-    }
-    
-    // MARK: - CRUD
-    
-    func add(_ tx: Transaction) {
-        guard !transactions.contains(where: { $0.id == tx.id }) else { return }
-        transactions.append(tx)
-    }
-    
-    func remove(id: Int) {
-        transactions.removeAll { $0.id == id }
-    }
-    
-    // MARK: - Persistence
-    
-    func saveAll() throws {
-        let array = transactions.map { $0.jsonObject }
-        let data = try JSONSerialization.data(withJSONObject: array, options: [.prettyPrinted])
-        try data.write(to: fileURL, options: [.atomicWrite])
-    }
-    
-    func loadAll() throws {
-        guard FileManager.default.fileExists(atPath: fileURL.path) else {
-            transactions = []
-            return
+
+    // MARK: Load
+    func load(from url: URL) throws {
+        guard FileManager.default.fileExists(atPath: url.path) else { transactions = []; return }
+
+        let data = try Data(contentsOf: url)
+        let dec  = JSONDecoder()
+        dec.dateDecodingStrategy = .custom { d in
+            let s = try d.singleValueContainer().decode(String.self)
+            if let date = ISO8601Any.date(from: s) { return date }
+            throw DecodingError.dataCorruptedError(in: try d.singleValueContainer(),
+                                                   debugDescription: "Bad date: \(s)")
         }
-        let data = try Data(contentsOf: fileURL)
-        let json = try JSONSerialization.jsonObject(with: data, options: [])
-        guard let array = json as? [Any] else {
-            throw FileCacheError.invalidFormat
-        }
-        var loaded: [Transaction] = []
-        for item in array {
-            if let tx = Transaction.parse(jsonObject: item),
-               !loaded.contains(where: { $0.id == tx.id }) {
-                loaded.append(tx)
-            }
-        }
-        transactions = loaded
+        transactions = try dec.decode([Transaction].self, from: data)
+    }
+
+    // MARK: Helpers
+    static func defaultFileURL(fileName: String) -> URL {
+        FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
+            .appendingPathComponent("\(fileName).json")
     }
 }

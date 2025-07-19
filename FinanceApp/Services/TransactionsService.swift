@@ -1,82 +1,115 @@
 import Foundation
 
 final class TransactionsService {
-    private let cache = TransactionsFileCache()
-    private(set) var transactions: [Transaction] = []
-    
-    init() {
-        refresh()
-    }
-    
-    func refresh() {
-        do {
-            try cache.loadAll()
-            transactions = cache.allTransactions
-        } catch {
-            print("⚠️ Failed to load transactions: \(error)")
-            transactions = []
-        }
-    }
-    
-    // MARK: - Fetching
-    func getTransactions(from start: Date, to end: Date) async -> [Transaction] {
-        return transactions.filter { $0.transactionDate >= start && $0.transactionDate <= end }
-    }
-    
-    // MARK: - Creating
-    func createTransaction(_ new: Transaction) async {
-        cache.add(new)
-        try? cache.saveAll()
-    }
-    
-    // MARK: - Updating
-    func updateTransaction(_ updated: Transaction) async {
-        if let idx = cache.allTransactions.firstIndex(where: { $0.id == updated.id }) {
-            cache.remove(id: updated.id)
-            cache.add(updated)
-            try? cache.saveAll()
-        }
-    }
-    
-    // MARK: - Deleting
-    func deleteTransaction(id: Int) async {
-        cache.remove(id: id)
-        try? cache.saveAll()
+    // MARK: - Dependencies
+    let client: NetworkClient
+    private let fileCache: TransactionsFileCache
+    private let fileURL: URL
+
+    // MARK: - Init
+    init(client: NetworkClient, fileName: String = "transactions") {
+        self.client = client
+        self.fileCache = TransactionsFileCache()
+        self.fileURL = TransactionsFileCache.defaultFileURL(fileName: fileName)
+
+        try? fileCache.load(from: fileURL)
     }
 
-    // MARK: - Mock data (однократно при старте, если файл пуст)
-    private func preloadMockData() {
-        let now = Date()
-        let twoDaysAgo = Calendar.current.date(byAdding: .day, value: -2, to: now)!
+    // MARK: - Cached
+    var cachedTransactions: [Transaction] {
+        fileCache.transactions
+    }
 
-        let account = BankAccount(
-            id: 1,
-            name: "Основной счёт",
-            balance: Decimal(string: "1000.00")!,
-            currency: "RUB"
+    func refreshFromCache() {
+        try? fileCache.load(from: fileURL)
+    }
+
+    // MARK: - Load
+    func getTransactions(forAccount accountId: Int, from start: Date, to end: Date) async throws -> [Transaction] {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd"
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = TimeZone(secondsFromGMT: 0)
+
+        let queryItems = [
+            URLQueryItem(name: "startDate", value: formatter.string(from: start)),
+            URLQueryItem(name: "endDate", value: formatter.string(from: end))
+        ]
+
+        let path = "transactions/account/\(accountId)/period"
+
+        let txs: [Transaction] = try await client.request(
+            path: path,
+            method: "GET",
+            body: Optional<EmptyRequest>.none,
+            queryItems: queryItems
         )
 
-        let categories = [
-            Category(id: 1, name: "Зарплата", emoji: "💰", isIncome: true),
-            Category(id: 2, name: "Аренда квартиры", emoji: "🏠", isIncome: false),
-            Category(id: 3, name: "Продукты", emoji: "🍬", isIncome: false),
-            Category(id: 4, name: "Одежда", emoji: "👔", isIncome: false),
-            Category(id: 5, name: "На собачку", emoji: "🐕", isIncome: false)
-        ]
+        fileCache.replaceAll(txs)
+        try? fileCache.save(to: fileURL)
 
-        let mockTransactions: [Transaction] = [
-            .init(id: 1, account: account, category: categories[0], amount: 45000, transactionDate: now, comment: "", createdAt: now, updatedAt: now),
-            .init(id: 2, account: account, category: categories[1], amount: 30000, transactionDate: now, comment: "", createdAt: now, updatedAt: now),
-            .init(id: 3, account: account, category: categories[3], amount: 1000, transactionDate: now, comment: "", createdAt: now, updatedAt: now),
-            .init(id: 4, account: account, category: categories[4], amount: 1500, transactionDate: now, comment: "Джэк", createdAt: now, updatedAt: now),
-            .init(id: 5, account: account, category: categories[4], amount: 500, transactionDate: now, comment: "Энни", createdAt: now, updatedAt: now),
-            .init(id: 6, account: account, category: categories[2], amount: 100, transactionDate: now, comment: "", createdAt: now, updatedAt: now),
-            .init(id: 7, account: account, category: categories[2], amount: 1050, transactionDate: twoDaysAgo, comment: "", createdAt: twoDaysAgo, updatedAt: twoDaysAgo)
-        ]
+        return txs
+    }
 
-        for tx in mockTransactions {
-            cache.add(tx)
-        }
-        try? cache.saveAll()
+    // MARK: - Create
+    func createTransaction(_ tx: TransactionRequestBody) async throws -> Transaction {
+        let response: TransactionResponseBody = try await client.request(
+            path: "transactions",
+            method: "POST",
+            body: tx
+        )
+
+        let bankAccountsService = BankAccountsService(client: client)
+        let categoriesService = CategoriesService(client: client)
+
+        let account = try await bankAccountsService.getAccount(withId: response.accountId)
+        let category = try await categoriesService.getCategory(withId: response.categoryId)
+
+        let formatter = ISO8601DateFormatter()
+
+        let transaction = Transaction(
+            id: response.id,
+            account: account,
+            category: category,
+            amount: Decimal(string: response.amount) ?? 0,
+            transactionDate: formatter.date(from: response.transactionDate) ?? Date(),
+            comment: response.comment,
+            createdAt: formatter.date(from: response.createdAt) ?? Date(),
+            updatedAt: formatter.date(from: response.updatedAt) ?? Date()
+        )
+
+        fileCache.add(transaction)
+        try? fileCache.save(to: fileURL)
+
+        return transaction
+    }
+
+
+
+    // MARK: - Update
+    func updateTransaction(id: Int, with tx: TransactionRequestBody) async throws -> Transaction {
+        let updated: Transaction = try await client.request(
+            path: "transactions/\(id)",
+            method: "PUT",
+            body: tx
+        )
+
+        fileCache.remove(withId: id)
+        fileCache.add(updated)
+        try? fileCache.save(to: fileURL)
+
+        return updated
+    }
+
+    // MARK: - Delete
+    func deleteTransaction(id: Int) async throws {
+        _ = try await client.request(
+            path: "transactions/\(id)",
+            method: "DELETE",
+            body: EmptyRequest()
+        ) as Void
+
+        fileCache.remove(withId: id)
+        try? fileCache.save(to: fileURL)
     }
 }
