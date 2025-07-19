@@ -47,7 +47,6 @@ final class AccountViewModel: ObservableObject {
         UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
     }
 
-    /// Вставка баланса из буфера обмена с фильтрацией
     func pasteBalanceFromClipboard() {
         if let clipboardText = UIPasteboard.general.string {
             let filtered = clipboardText.filter { "0123456789.".contains($0) }

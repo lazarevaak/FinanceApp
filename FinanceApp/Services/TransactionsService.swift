@@ -1,103 +1,22 @@
 import Foundation
 
 final class TransactionsService {
+    private let cache = TransactionsFileCache()
+    private(set) var transactions: [Transaction] = []
     
-    // MARK: - Mock Data
-    private var transactions: [Transaction] = {
-        let formatter = ISO8601DateFormatter()
-        formatter.formatOptions = [
-            .withInternetDateTime,
-            .withFractionalSeconds
-        ]
-        
-        let now = Date()
-        let twoDaysAgo = Calendar.current.date(byAdding: .day, value: -2, to: now)!
-        
-        let account = BankAccount(
-            id: 1,
-            name: "Основной счёт",
-            balance: Decimal(string: "1000.00")!,
-            currency: "RUB"
-        )
-        let salaryCategory = Category(id: 1, name: "Зарплата", emoji: "💰", isIncome: true)
-        let flatCategory = Category(id: 2, name: "Аренда квартиры", emoji: "🏠", isIncome: false)
-        let clothesCategory = Category(id: 4, name: "Одежда", emoji: "👔", isIncome: false)
-        let groceriesCategory = Category(id: 3, name: "Продукты", emoji: "🍬", isIncome: false)
-        let dogCategory = Category(id: 5, name: "На собачку", emoji: "🐕", isIncome: false)
-
-        return [
-            Transaction(
-                id: 1,
-                account: account,
-                category: salaryCategory,
-                amount: Decimal(string: "45000.00")!,
-                transactionDate: now,
-                comment: "",
-                createdAt: now,
-                updatedAt: now
-            ),
-            Transaction(
-                id: 2,
-                account: account,
-                category: flatCategory,
-                amount: Decimal(string: "30000.00")!,
-                transactionDate: now,
-                comment: "",
-                createdAt: now,
-                updatedAt: now
-            ),
-            Transaction(
-                id: 3,
-                account: account,
-                category: clothesCategory,
-                amount: Decimal(string: "1000.00")!,
-                transactionDate: now,
-                comment: "",
-                createdAt: now,
-                updatedAt: now
-            ),
-            Transaction(
-                id: 4,
-                account: account,
-                category: dogCategory,
-                amount: Decimal(string: "1500.00")!,
-                transactionDate: now,
-                comment: "Джэк",
-                createdAt: now,
-                updatedAt: now
-            ),
-            Transaction(
-                id: 5,
-                account: account,
-                category: dogCategory,
-                amount: Decimal(string: "500.00")!,
-                transactionDate: now,
-                comment: "Энни",
-                createdAt: now,
-                updatedAt: now
-            ),
-            Transaction(
-                id: 6,
-                account: account,
-                category: groceriesCategory,
-                amount: Decimal(string: "100.00")!,
-                transactionDate: now,
-                comment: "",
-                createdAt: now,
-                updatedAt: now
-            ),
-            Transaction(
-                id: 7,
-                account: account,
-                category: groceriesCategory,
-                amount: Decimal(string: "1050.00")!,
-                transactionDate: twoDaysAgo,
-                comment: "",
-                createdAt: twoDaysAgo,
-                updatedAt: twoDaysAgo
-            )
-        ]
-    }()
+    init() {
+        refresh()
+    }
+    
+    func refresh() {
+        do {
+            try cache.loadAll()
+            transactions = cache.allTransactions
+        } catch {
+            print("⚠️ Failed to load transactions: \(error)")
+            transactions = []
+        }
+    }
     
     // MARK: - Fetching
     func getTransactions(from start: Date, to end: Date) async -> [Transaction] {
@@ -106,17 +25,58 @@ final class TransactionsService {
     
     // MARK: - Creating
     func createTransaction(_ new: Transaction) async {
-        transactions.append(new)
+        cache.add(new)
+        try? cache.saveAll()
     }
     
     // MARK: - Updating
     func updateTransaction(_ updated: Transaction) async {
-        guard let idx = transactions.firstIndex(where: { $0.id == updated.id }) else { return }
-        transactions[idx] = updated
+        if let idx = cache.allTransactions.firstIndex(where: { $0.id == updated.id }) {
+            cache.remove(id: updated.id)
+            cache.add(updated)
+            try? cache.saveAll()
+        }
     }
     
     // MARK: - Deleting
     func deleteTransaction(id: Int) async {
-        transactions.removeAll { $0.id == id }
+        cache.remove(id: id)
+        try? cache.saveAll()
+    }
+
+    // MARK: - Mock data (однократно при старте, если файл пуст)
+    private func preloadMockData() {
+        let now = Date()
+        let twoDaysAgo = Calendar.current.date(byAdding: .day, value: -2, to: now)!
+
+        let account = BankAccount(
+            id: 1,
+            name: "Основной счёт",
+            balance: Decimal(string: "1000.00")!,
+            currency: "RUB"
+        )
+
+        let categories = [
+            Category(id: 1, name: "Зарплата", emoji: "💰", isIncome: true),
+            Category(id: 2, name: "Аренда квартиры", emoji: "🏠", isIncome: false),
+            Category(id: 3, name: "Продукты", emoji: "🍬", isIncome: false),
+            Category(id: 4, name: "Одежда", emoji: "👔", isIncome: false),
+            Category(id: 5, name: "На собачку", emoji: "🐕", isIncome: false)
+        ]
+
+        let mockTransactions: [Transaction] = [
+            .init(id: 1, account: account, category: categories[0], amount: 45000, transactionDate: now, comment: "", createdAt: now, updatedAt: now),
+            .init(id: 2, account: account, category: categories[1], amount: 30000, transactionDate: now, comment: "", createdAt: now, updatedAt: now),
+            .init(id: 3, account: account, category: categories[3], amount: 1000, transactionDate: now, comment: "", createdAt: now, updatedAt: now),
+            .init(id: 4, account: account, category: categories[4], amount: 1500, transactionDate: now, comment: "Джэк", createdAt: now, updatedAt: now),
+            .init(id: 5, account: account, category: categories[4], amount: 500, transactionDate: now, comment: "Энни", createdAt: now, updatedAt: now),
+            .init(id: 6, account: account, category: categories[2], amount: 100, transactionDate: now, comment: "", createdAt: now, updatedAt: now),
+            .init(id: 7, account: account, category: categories[2], amount: 1050, transactionDate: twoDaysAgo, comment: "", createdAt: twoDaysAgo, updatedAt: twoDaysAgo)
+        ]
+
+        for tx in mockTransactions {
+            cache.add(tx)
+        }
+        try? cache.saveAll()
     }
 }

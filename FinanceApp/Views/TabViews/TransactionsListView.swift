@@ -1,11 +1,27 @@
 import SwiftUI
 
-// MARK: - TransactionsListView
+// MARK: — Режим показа формы
+enum TransactionFormMode: Identifiable {
+    case create(direction: Direction)
+    case edit(transaction: Transaction)
+
+    var id: String {
+        switch self {
+        case .create(let direction):
+            return "create-\(direction)"
+        case .edit(let tx):
+            return "edit-\(tx.id)"
+        }
+    }
+}
+
+// MARK: — Список операций с кнопкой “+”
 struct TransactionsListView: View {
     let direction: Direction
 
     @StateObject private var vm = TransactionsListViewModel()
     @State private var isShowingHistory = false
+    @State private var formMode: TransactionFormMode?
 
     @AppStorage("selectedCurrency") private var storedCurrency: String = Currency.ruble.rawValue
     private var currency: Currency { Currency(rawValue: storedCurrency) ?? .ruble }
@@ -13,23 +29,11 @@ struct TransactionsListView: View {
     var body: some View {
         NavigationView {
             ZStack(alignment: .bottomTrailing) {
-                Color(.systemGray6)
-                    .ignoresSafeArea()
+                Color(.systemGray6).ignoresSafeArea()
 
                 ScrollView {
                     VStack(spacing: 0) {
-                        HStack {
-                            Text("Всего")
-                            Spacer()
-                            Text(format(amount: totalAmount))
-                        }
-                        .padding(.vertical, 12)
-                        .padding(.horizontal, 16)
-                        .background(Color.white)
-                        .cornerRadius(12)
-                        .shadow(color: Color.black.opacity(0.05), radius: 4, x: 0, y: 2)
-                        .padding(.horizontal)
-                        .padding(.top, 16)
+                        totalAmountCard
 
                         Text("ОПЕРАЦИИ")
                             .font(.system(size: 12))
@@ -41,8 +45,8 @@ struct TransactionsListView: View {
 
                         LazyVStack(spacing: 0) {
                             ForEach(vm.transactions.filter { $0.category.direction == direction }) { tx in
-                                NavigationLink {
-                                    // TODO: Edit screen
+                                Button {
+                                    formMode = .edit(transaction: tx)
                                 } label: {
                                     TransactionRow(transaction: tx)
                                         .padding(.horizontal, 8)
@@ -50,8 +54,7 @@ struct TransactionsListView: View {
                                 .buttonStyle(.plain)
 
                                 Divider()
-                                    .padding(.leading,
-                                             tx.category.direction == .outcome ? 56 : 16)
+                                    .padding(.leading, tx.category.direction == .outcome ? 56 : 16)
                             }
                         }
                         .background(Color.white)
@@ -60,20 +63,11 @@ struct TransactionsListView: View {
                         .padding(.bottom, 80)
                     }
                 }
-
-                Button {
-                    // TODO: Add transaction
-                } label: {
-                    Image(systemName: "plus")
-                        .font(.system(size: 24))
-                        .foregroundColor(.white)
-                        .padding()
-                        .background(Color("AccentColor"))
-                        .clipShape(Circle())
-                        .shadow(color: Color.black.opacity(0.2), radius: 6, x: 0, y: 4)
+                .refreshable {
+                    vm.refresh()
                 }
-                .padding(.trailing, 24)
-                .padding(.bottom, 24)
+
+                addButton
             }
             .navigationTitle(direction == .income ? "Доходы сегодня" : "Расходы сегодня")
             .navigationBarTitleDisplayMode(.large)
@@ -87,16 +81,54 @@ struct TransactionsListView: View {
                             .font(.system(size: 20))
                             .foregroundColor(Color("IconColor"))
                     }
-                    .onTapGesture { isShowingHistory = true }
                 }
             }
-        }
-        .task {
-            await vm.fetchTransactionsForToday()
+            .task {
+                await vm.fetchTransactionsForToday()
+            }
+            .sheet(item: $formMode, onDismiss: {
+                vm.refresh()
+            }) { mode in
+                TransactionFormView(mode: mode)
+            }
         }
     }
 
-    // MARK: - Computed Properties
+    // MARK: — Вспомогательные View
+
+    private var totalAmountCard: some View {
+        HStack {
+            Text("Всего")
+            Spacer()
+            Text(format(amount: totalAmount))
+        }
+        .padding(.vertical, 12)
+        .padding(.horizontal, 16)
+        .background(Color.white)
+        .cornerRadius(12)
+        .shadow(color: Color.black.opacity(0.05), radius: 4, x: 0, y: 2)
+        .padding(.horizontal)
+        .padding(.top, 16)
+    }
+
+    private var addButton: some View {
+        Button {
+            formMode = .create(direction: direction)
+        } label: {
+            Image(systemName: "plus")
+                .font(.system(size: 24))
+                .foregroundColor(.white)
+                .padding()
+                .background(Color("AccentColor"))
+                .clipShape(Circle())
+                .shadow(color: Color.black.opacity(0.2), radius: 6, x: 0, y: 4)
+        }
+        .padding(.trailing, 24)
+        .padding(.bottom, 24)
+    }
+
+    // MARK: — Вспомогательные свойства
+
     private var totalAmount: Decimal {
         vm.transactions
             .filter { $0.category.direction == direction }
@@ -104,13 +136,11 @@ struct TransactionsListView: View {
             .reduce(0, +)
     }
 
-    // MARK: - Amount Formatting
     private func format(amount: Decimal) -> String {
         let formatter = NumberFormatter()
         formatter.numberStyle = .currency
         formatter.currencySymbol = currency.symbol
         formatter.maximumFractionDigits = 0
-        return formatter.string(from: amount as NSDecimalNumber) ?? "0 \(currency.symbol)"
+        return formatter.string(from: amount as NSDecimalNumber) ?? "0 \(currency.symbol)"
     }
 }
-
