@@ -1,8 +1,9 @@
 import Foundation
 
 final class AnalysisViewModel {
-    private let service = TransactionsService()
+    private let service: TransactionsService
     private let direction: Direction
+    private let accountId: Int
 
     private(set) var transactions: [Transaction] = []
     private(set) var total: Decimal = 0
@@ -18,32 +19,57 @@ final class AnalysisViewModel {
         didSet { sortTransactions() }
     }
 
+    /// Колбэк для уведомления контроллера о том, что данные обновились
     var onUpdate: (() -> Void)?
 
-    init(direction: Direction) {
+    /// - Parameters:
+    ///   - direction: фильтр по приходу/расходу
+    ///   - accountId: идентификатор счёта, из которого берём транзакции
+    ///   - client: сетевой клиент (по умолчанию URLSessionNetworkClient с вашим токеном)
+    init(
+        direction: Direction,
+        accountId: Int,
+        client: NetworkClient = URLSessionNetworkClient()
+    ) {
         self.direction = direction
+        self.accountId = accountId
+        self.service = TransactionsService(client: client)
+
         let now = Date()
-        self.endDate = Calendar.current.date(bySettingHour: 23, minute: 59, second: 59, of: now)!
-        let oneMonthAgo = Calendar.current.date(byAdding: .month, value: -1, to: now)!
+        self.endDate = Calendar.current.date(
+            bySettingHour: 23, minute: 59, second: 59, of: now
+        )!
+        let oneMonthAgo = Calendar.current.date(
+            byAdding: .month, value: -1, to: now
+        )!
         self.startDate = Calendar.current.startOfDay(for: oneMonthAgo)
+
         load()
     }
 
     private func load() {
-        Task.detached { [weak self] in
-            guard let self else { return }
+        Task { [weak self] in
+            guard let self = self else { return }
+            do {
+                // Подгрузка всех транзакций за период
+                let all = try await service.fetchTransactions(
+                    accountId: accountId,
+                    from: startDate.startOfDay(),
+                    to: endDate.endOfDay()
+                )
+                // Фильтрация по типу (доход/расход)
+                let filtered = all.filter { $0.category.direction == self.direction }
+                let newTotal = filtered.reduce(Decimal(0)) { $0 + $1.amount }
 
-            let all = await service.getTransactions(
-                from: startDate.startOfDay(),
-                to: endDate.endOfDay()
-            )
-            let filtered = all.filter { $0.category.direction == self.direction }
-            let newTotal = filtered.reduce(Decimal(0)) { $0 + $1.amount }
-
-            await MainActor.run {
-                self.transactions = filtered
-                self.total = newTotal
-                self.sortTransactions()
+                // Обновляем на главном потоке
+                await MainActor.run {
+                    self.transactions = filtered
+                    self.total = newTotal
+                    self.sortTransactions()
+                }
+            } catch {
+                // Обработка ошибки (можно добавить onError колбэк или published-свойство)
+                print("AnalysisViewModel.load failed:", error)
             }
         }
     }

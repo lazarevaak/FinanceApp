@@ -5,6 +5,7 @@ import SwiftUI
 struct HistoryView: View {
     // MARK: - Properties
     let direction: Direction
+    let accountId: Int
     @StateObject private var vm: HistoryViewModel
     @Environment(\.presentationMode) private var presentationMode
 
@@ -12,9 +13,12 @@ struct HistoryView: View {
     private var currency: Currency { Currency(rawValue: storedCurrency) ?? .ruble }
 
     // MARK: - Init
-    init(direction: Direction) {
+    init(direction: Direction, accountId: Int) {
         self.direction = direction
-        _vm = StateObject(wrappedValue: HistoryViewModel(direction: direction))
+        self.accountId = accountId
+        _vm = StateObject(
+            wrappedValue: HistoryViewModel(direction: direction, accountId: accountId)
+        )
     }
 
     // MARK: - Body
@@ -115,7 +119,7 @@ struct HistoryView: View {
                 }
                 ToolbarItem(placement: .navigationBarTrailing) {
                     NavigationLink {
-                        AnalysisViewControllerWrapper(direction: direction)
+                        AnalysisViewControllerWrapper(direction: direction,  accountId: accountId)
                             .edgesIgnoringSafeArea(.top)
                             .navigationBarBackButtonHidden(true)
                     } label: {

@@ -1,3 +1,5 @@
+// TransactionFormView.swift
+
 import SwiftUI
 
 // MARK: — Подвьюы
@@ -195,28 +197,41 @@ struct TransactionFormView: View {
     @FocusState private var amountFocused: Bool
     @State private var showValidationAlert = false
 
+    // теперь храним accountId в самом вью
+    private let accountId: Int
+
     @AppStorage("selectedCurrency") private var storedCurrency: String = Currency.ruble.rawValue
     private var currencySymbol: String {
         Currency(rawValue: storedCurrency)?.symbol ?? ""
     }
 
-    init(mode: TransactionFormMode) {
+    init(mode: TransactionFormMode, accountId: Int) {
+        self.accountId = accountId
+
+        // Настраиваем внешний вид навбара
         let appearance = UINavigationBarAppearance()
         appearance.configureWithOpaqueBackground()
         appearance.backgroundColor = .clear
         appearance.shadowColor = .clear
         appearance.backgroundEffect = nil
-
         UINavigationBar.appearance().standardAppearance = appearance
         UINavigationBar.appearance().scrollEdgeAppearance = appearance
 
+        // Преобразуем внешний режим в внутренний
         let internalMode: TransactionFormModeInternal = {
             switch mode {
             case .create(let dir): return .create(direction: dir)
             case .edit(let tx):    return .edit(transaction: tx)
             }
         }()
-        _vm = StateObject(wrappedValue: .init(mode: internalMode))
+
+        // Инициализируем ViewModel с реальным accountId
+        _vm = StateObject(
+            wrappedValue: TransactionFormViewModel(
+                mode: internalMode,
+                accountId: accountId
+            )
+        )
     }
 
     var body: some View {

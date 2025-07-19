@@ -1,73 +1,56 @@
 import SwiftUI
 
 struct MainTabView: View {
-    // MARK: - Initialization
-    init() {
-        let tabBarAppearance = UITabBarAppearance()
-        tabBarAppearance.configureWithOpaqueBackground()
-        tabBarAppearance.backgroundColor = .white
-        
-        UITabBar.appearance().standardAppearance = tabBarAppearance
-        UITabBar.appearance().scrollEdgeAppearance = tabBarAppearance
+    // MARK: - Dependencies
+    private let client: NetworkClient
+    private let accountService: BankAccountsService
+    private let initialAccountId: Int
+
+    // MARK: - State
+    @State private var accountId: Int = 0
+
+    // MARK: - Init
+    // MARK: - Init
+    init(client: NetworkClient, accountId: Int) {
+        self.client = client
+        self.accountId = accountId
+
+        let appearance = UITabBarAppearance()
+        appearance.configureWithOpaqueBackground()
+        appearance.backgroundColor = UIColor.white
+
+        UITabBar.appearance().standardAppearance = appearance
+        UITabBar.appearance().scrollEdgeAppearance = appearance
     }
-    
-    // MARK: - Body
+
+
     var body: some View {
         TabView {
-            // MARK: - Outcome Tab
-            TransactionsListView(direction: .outcome)
-                .tabItem {
-                    Label {
-                        Text("Расходы")
-                    } icon: {
-                        Image("tab_outcome")
-                            .renderingMode(.template)
-                    }
-                }
+            TransactionsListView(direction: .outcome, accountId: accountId)
+                .tabItem { Label("Расходы", systemImage: "minus.circle") }
 
-            // MARK: - Income Tab
-            TransactionsListView(direction: .income)
-                .tabItem {
-                    Label {
-                        Text("Доходы")
-                    } icon: {
-                        Image("tab_income")
-                            .renderingMode(.template)
-                    }
-                }
+            TransactionsListView(direction: .income, accountId: accountId)
+                .tabItem { Label("Доходы", systemImage: "plus.circle") }
 
-            // MARK: - Account Tab
-            AccountView()
-                .tabItem {
-                    Label {
-                        Text("Счет")
-                    } icon: {
-                        Image("tab_account")
-                            .renderingMode(.template)
-                    }
-                }
+            AccountView(client: client, accountId: accountId)
+                .tabItem { Label("Счет", systemImage: "creditcard") }
 
-            // MARK: - Categories Tab
             CategoriesView()
-                .tabItem {
-                    Label {
-                        Text("Статьи")
-                    } icon: {
-                        Image("tab_categories")
-                            .renderingMode(.template)
-                    }
-                }
+                .tabItem { Label("Статьи", systemImage: "list.bullet") }
 
-            // MARK: - Settings Tab
             SettingsView()
-                .tabItem {
-                    Label {
-                        Text("Настройки")
-                    } icon: {
-                        Image("tab_settings")
-                            .renderingMode(.template)
-                    }
-                }
+                .tabItem { Label("Настройки", systemImage: "gear") }
+        }
+        .onAppear {
+            self.accountId = initialAccountId
+        }
+        .task {
+            do {
+                let account = try await accountService.getAccount(withId: initialAccountId)
+                accountId = account.id
+            } catch {
+                print("Ошибка загрузки: \(error.localizedDescription)")
+            }
         }
     }
 }

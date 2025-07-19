@@ -1,5 +1,4 @@
 import SwiftUI
-import Combine
 
 // MARK: – String+Fuzzy
 extension String {
@@ -15,7 +14,10 @@ extension String {
         guard n > 0 else { return m }
         guard m > 0 else { return n }
 
-        var dp = [[Int]](repeating: [Int](repeating: 0, count: m+1), count: n+1)
+        var dp = [[Int]](
+            repeating: [Int](repeating: 0, count: m+1),
+            count: n+1
+        )
         for i in 0...n { dp[i][0] = i }
         for j in 0...m { dp[0][j] = j }
 
@@ -24,7 +26,7 @@ extension String {
                 if s[i-1] == t[j-1] {
                     dp[i][j] = dp[i-1][j-1]
                 } else {
-                    dp[i][j] = Swift.min (
+                    dp[i][j] = Swift.min(
                         dp[i-1][j] + 1,
                         dp[i][j-1] + 1,
                         dp[i-1][j-1] + 1
@@ -44,16 +46,20 @@ final class CategoriesViewModel: ObservableObject {
 
     private let service: CategoriesService
 
-    init(service: CategoriesService = .init()) {
+    init(
+        service: CategoriesService = .init(
+            client: URLSessionNetworkClient()
+        )
+    ) {
         self.service = service
         Task { await loadCategories() }
     }
 
     private func loadCategories() async {
         do {
-            allCategories = try await service.categories()
+            allCategories = try await service.fetchAll()
         } catch {
-            print("Не удалось загрузить категории:", error)
+            print()
         }
     }
 
@@ -63,11 +69,9 @@ final class CategoriesViewModel: ObservableObject {
         let q = searchText.normalized
 
         let withDistance: [(Category, Int)] = allCategories.map { cat in
-            let nameNorm = cat.name.normalized
-            let dist = nameNorm.levenshteinDistance(to: q)
+            let dist = cat.name.normalized.levenshteinDistance(to: q)
             return (cat, dist)
         }
-        
         let threshold = max(2, q.count / 2)
 
         return withDistance

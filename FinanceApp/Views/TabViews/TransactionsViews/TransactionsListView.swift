@@ -18,53 +18,39 @@ enum TransactionFormMode: Identifiable {
 // MARK: — Список операций с кнопкой “+”
 struct TransactionsListView: View {
     let direction: Direction
+    let accountId: Int
 
-    @StateObject private var vm = TransactionsListViewModel()
+    @StateObject private var viewModel: TransactionsListViewModel
     @State private var isShowingHistory = false
     @State private var formMode: TransactionFormMode?
 
     @AppStorage("selectedCurrency") private var storedCurrency: String = Currency.ruble.rawValue
     private var currency: Currency { Currency(rawValue: storedCurrency) ?? .ruble }
 
+    init(direction: Direction, accountId: Int) {
+        self.direction = direction
+        self.accountId = accountId
+        _viewModel = StateObject(
+            wrappedValue: TransactionsListViewModel(accountId: accountId)
+        )
+    }
+
     var body: some View {
         NavigationView {
             ZStack(alignment: .bottomTrailing) {
-                Color(.systemGray6).ignoresSafeArea()
+                Color(.systemGray6)
+                    .ignoresSafeArea()
 
                 ScrollView {
                     VStack(spacing: 0) {
                         totalAmountCard
-
-                        Text("ОПЕРАЦИИ")
-                            .font(.system(size: 12))
-                            .foregroundColor(.secondary)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding(.horizontal, 24)
-                            .padding(.vertical, 12)
-                            .padding(.top, 8)
-
-                        LazyVStack(spacing: 0) {
-                            ForEach(vm.transactions.filter { $0.category.direction == direction }) { tx in
-                                Button {
-                                    formMode = .edit(transaction: tx)
-                                } label: {
-                                    TransactionRow(transaction: tx)
-                                        .padding(.horizontal, 8)
-                                }
-                                .buttonStyle(.plain)
-
-                                Divider()
-                                    .padding(.leading, tx.category.direction == .outcome ? 56 : 16)
-                            }
-                        }
-                        .background(Color.white)
-                        .cornerRadius(12)
-                        .padding(.horizontal)
-                        .padding(.bottom, 80)
+                        operationsHeader
+                        transactionsCard
+                            .padding(.bottom, 80)
                     }
                 }
                 .refreshable {
-                    vm.refresh()
+                    await viewModel.fetchTransactionsForToday()
                 }
 
                 addButton
@@ -73,10 +59,9 @@ struct TransactionsListView: View {
             .navigationBarTitleDisplayMode(.large)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    NavigationLink(
-                        destination: HistoryView(direction: direction),
-                        isActive: $isShowingHistory
-                    ) {
+                    Button {
+                        isShowingHistory = true
+                    } label: {
                         Image(systemName: "clock")
                             .font(.system(size: 20))
                             .foregroundColor(Color("IconColor"))
@@ -84,18 +69,58 @@ struct TransactionsListView: View {
                 }
             }
             .task {
-                await vm.fetchTransactionsForToday()
+                await viewModel.fetchTransactionsForToday()
             }
             .sheet(item: $formMode, onDismiss: {
-                vm.refresh()
+                Task { await viewModel.fetchTransactionsForToday() }
             }) { mode in
-                TransactionFormView(mode: mode)
+                TransactionFormView(mode: mode, accountId: accountId)
             }
         }
     }
 
-    // MARK: — Вспомогательные View
+    // MARK: — Фильтрация и заголовки
+    private var filteredTransactions: [Transaction] {
+        viewModel.transactions
+            .filter { $0.category.direction == direction }
+    }
 
+    private var operationsHeader: some View {
+        Text("ОПЕРАЦИИ")
+            .font(.system(size: 12))
+            .foregroundColor(.secondary)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 24)
+            .padding(.vertical, 12)
+            .padding(.top, 8)
+    }
+
+    private var transactionsCard: some View {
+        LazyVStack(spacing: 0) {
+            ForEach(filteredTransactions) { tx in
+                transactionRow(for: tx)
+            }
+        }
+        .background(Color.white)
+        .cornerRadius(12)
+        .padding(.horizontal)
+    }
+
+    @ViewBuilder
+    private func transactionRow(for tx: Transaction) -> some View {
+        Button {
+            formMode = .edit(transaction: tx)
+        } label: {
+            TransactionRow(transaction: tx)
+                .padding(.horizontal, 8)
+        }
+        .buttonStyle(.plain)
+
+        Divider()
+            .padding(.leading, tx.category.direction == .outcome ? 56 : 16)
+    }
+
+    // MARK: — Карточка с общей суммой
     private var totalAmountCard: some View {
         HStack {
             Text("Всего")
@@ -111,6 +136,7 @@ struct TransactionsListView: View {
         .padding(.top, 16)
     }
 
+    // MARK: — Кнопка “+”
     private var addButton: some View {
         Button {
             formMode = .create(direction: direction)
@@ -127,11 +153,9 @@ struct TransactionsListView: View {
         .padding(.bottom, 24)
     }
 
-    // MARK: — Вспомогательные свойства
-
+    // MARK: — Подсчет и форматирование
     private var totalAmount: Decimal {
-        vm.transactions
-            .filter { $0.category.direction == direction }
+        filteredTransactions
             .map(\.amount)
             .reduce(0, +)
     }
@@ -141,6 +165,7 @@ struct TransactionsListView: View {
         formatter.numberStyle = .currency
         formatter.currencySymbol = currency.symbol
         formatter.maximumFractionDigits = 0
-        return formatter.string(from: amount as NSDecimalNumber) ?? "0 \(currency.symbol)"
+        return formatter.string(from: amount as NSDecimalNumber)
+            ?? "0 \(currency.symbol)"
     }
 }
