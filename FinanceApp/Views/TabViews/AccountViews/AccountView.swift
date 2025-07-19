@@ -1,12 +1,8 @@
 import SwiftUI
 import UIKit
 
-private enum Constants {
-    static let sidePadding: CGFloat = 16
-    static let rowPadding: CGFloat = 12
-    static let cornerRadius: CGFloat = 12
-    static let verticalGap: CGFloat = 16
-    static let rowGap: CGFloat = 8
+extension Notification.Name {
+    static let operationsDidChange = Notification.Name("operationsDidChange")
 }
 
 struct AccountView: View {
@@ -24,14 +20,14 @@ struct AccountView: View {
 
     var body: some View {
         NavigationView {
-            VStack(spacing: Constants.verticalGap) {
+            VStack(spacing: 16) {
                 Text("Мой счёт")
                     .font(.largeTitle.bold())
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal, Constants.sidePadding)
+                    .padding(.horizontal, 16)
 
                 ScrollView {
-                    VStack(spacing: Constants.rowGap) {
+                    VStack(spacing: 8) {
                         balanceRow
                         currencyRow
                             .onTapGesture {
@@ -40,8 +36,8 @@ struct AccountView: View {
                                 }
                             }
                     }
-                    .padding(.horizontal, Constants.sidePadding)
-                    .padding(.top, Constants.verticalGap)
+                    .padding(.horizontal, 16)
+                    .padding(.top, 16)
                 }
                 .refreshable { await vm.loadAccount() }
             }
@@ -101,6 +97,12 @@ struct AccountView: View {
         } message: {
             Text(vm.error?.localizedDescription ?? "Неизвестная ошибка")
         }
+        .onAppear {
+            Task { await vm.loadAccount() }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .operationsDidChange)) { _ in
+            Task { await vm.loadAccount() }
+        }
     }
 
     // MARK: Balance Row
@@ -127,12 +129,12 @@ struct AccountView: View {
                 .spoiler(isOn: $hideBalance)
             }
         }
-        .padding(Constants.rowPadding)
+        .padding(12)
         .frame(maxWidth: .infinity)
         .background(
             vm.isEditing ? Color(.systemBackground) : Color.accentColor
         )
-        .clipShape(RoundedRectangle(cornerRadius: Constants.cornerRadius))
+        .clipShape(RoundedRectangle(cornerRadius: 12))
         .contentShape(Rectangle())
         .onTapGesture { if vm.isEditing { isFocused = true } }
     }
@@ -150,13 +152,13 @@ struct AccountView: View {
                     .foregroundColor(.gray)
             }
         }
-        .padding(Constants.rowPadding)
+        .padding(12)
         .frame(maxWidth: .infinity)
         .background(
             vm.isEditing
             ? Color(.systemBackground)
             : Color.accentColor.opacity(0.20)
         )
-        .clipShape(RoundedRectangle(cornerRadius: Constants.cornerRadius))
+        .clipShape(RoundedRectangle(cornerRadius: 12))
     }
 }

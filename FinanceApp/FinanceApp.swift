@@ -9,7 +9,6 @@ struct FinanceApp: App {
     // MARK: - Scene
     var body: some Scene {
         WindowGroup {
-            // Используем конкретную реализацию, а не протокол NetworkClient
            let client = NetworkClient(token: token)
             MainTabView(client: client, accountId: userId)
                 .accentColor(Color("AccentColor"))

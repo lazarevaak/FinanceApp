@@ -14,13 +14,9 @@ struct Category: Codable, Identifiable {
         isIncome ? .income : .outcome
     }
 
-    // MARK: - CodingKeys
-
     private enum CodingKeys: String, CodingKey {
         case id, name, emoji, isIncome
     }
-
-    // MARK: - Init
 
     init(id: Int, name: String, emoji: Character, isIncome: Bool) {
         self.id = id
@@ -29,23 +25,24 @@ struct Category: Codable, Identifiable {
         self.isIncome = isIncome
     }
 
-    // MARK: - Decodable
-
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        self.id = try container.decode(Int.self, forKey: .id)
-        self.name = try container.decode(String.self, forKey: .name)
+
+        id = try container.decode(Int.self, forKey: .id)
+        name = try container.decode(String.self, forKey: .name)
 
         let emojiString = try container.decode(String.self, forKey: .emoji)
-        guard let firstChar = emojiString.first else {
-            throw DecodingError.dataCorruptedError(forKey: .emoji, in: container,
-                                                   debugDescription: "Строка не один эмоджи или пустая строка.")
-        }
-        self.emoji = firstChar
-        self.isIncome = try container.decode(Bool.self, forKey: .isIncome)
-    }
 
-    // MARK: - Encodable
+        guard let firstChar = emojiString.first else {
+            throw DecodingError.dataCorruptedError(
+                forKey: .emoji,
+                in: container,
+                debugDescription: "Строка не один эмоджи или пустая строка."
+            )
+        }
+        emoji = firstChar
+        isIncome = try container.decode(Bool.self, forKey: .isIncome)
+    }
 
     func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)

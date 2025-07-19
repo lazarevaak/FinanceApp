@@ -1,9 +1,8 @@
 import SwiftUI
-import Combine
+import Foundation
 
-/// Внутренний режим формы: создание или редактирование
 enum TransactionFormModeInternal {
-    case create(direction: Direction)
+    case create(direction: Direction, accountId: Int)
     case edit(transaction: Transaction)
 
     var isCreate: Bool {
@@ -11,37 +10,50 @@ enum TransactionFormModeInternal {
         else { return false }
     }
     var isEdit: Bool { !isCreate }
+
+    var direction: Direction {
+        switch self {
+        case .create(let d, _): return d
+        case .edit(let tx):     return tx.category.direction
+        }
+    }
+
+    var accountId: Int {
+        switch self {
+        case .create(_, let id): return id
+        case .edit(let tx):      return tx.account.id
+        }
+    }
 }
 
 @MainActor
 final class TransactionFormViewModel: ObservableObject {
-    // MARK: - Input
+    // MARK: - Published state
     @Published var category: Category?
     @Published var amountString: String = ""
     @Published var date: Date = Date()
     @Published var comment: String = ""
     @Published var showCategoryPicker = false
     @Published var categories: [Category] = []
+    @Published var errorWrapper: ErrorWrapper?
 
-    // MARK: - Dependencies
+    // MARK: - Dependencies & mode
     let mode: TransactionFormModeInternal
     private let txService: TransactionsService
     private let accService: BankAccountsService
-    private let accountId: Int
     private var original: Transaction?
-    private let isoFormatter = ISO8601DateFormatter()
 
     // MARK: - Init
     init(
         mode: TransactionFormModeInternal,
-        accountId: Int,
-        txService: TransactionsService = .init(client: URLSessionNetworkClient()),
-        accService: BankAccountsService = .init(client: URLSessionNetworkClient())
+        txService: TransactionsService? = nil,
+        accService: BankAccountsService? = nil
     ) {
         self.mode = mode
-        self.accountId = accountId
         self.txService = txService
+            ?? TransactionsService(client: NetworkClient(token: "jkUZptMlYVqSaxWdzuQWKi1B"))
         self.accService = accService
+            ?? BankAccountsService(client: NetworkClient(token: "jkUZptMlYVqSaxWdzuQWKi1B"))
 
         if case .edit(let tx) = mode {
             original = tx
@@ -51,90 +63,92 @@ final class TransactionFormViewModel: ObservableObject {
             comment = tx.comment ?? ""
         }
 
-        Task { await loadCategories() }
-    }
-
-    // MARK: - Load categories
-    private func loadCategories() async {
-        do {
-            // Получаем транзакции по заданному аккаунту
-            let allTx = try await txService.fetchTransactions(
-                accountId: accountId,
-                from: .distantPast,
-                to: .distantFuture
-            )
-            // Фильтрация по направлению
-            let filtered = allTx.filter { $0.category.direction == direction }
-            // Уникальные категории
-            let cats = filtered.map { $0.category }
-            let unique = Dictionary(grouping: cats, by: \ .id)
-                .compactMap { $1.first }
-            categories = unique
-        } catch {
-            print("Error loading categories: \(error)")
+        Task {
+            do {
+                let account = try await self.accService.getAccount(withId: self.mode.accountId)
+                let allTx = try await self.txService.getTransactions(
+                    forAccount: self.mode.accountId,
+                    from: .distantPast,
+                    to: .distantFuture
+                )
+                let filtered = allTx.filter { $0.category.direction == self.direction }
+                let cats = filtered.map(\.category)
+                let unique = Dictionary(grouping: cats, by: \.id)
+                    .compactMap { _, group in group.first }
+                self.categories = unique
+            } catch {
+                self.errorWrapper = ErrorWrapper(
+                    message: "Не удалось загрузить категории: \(error.localizedDescription)"
+                )
+            }
         }
     }
 
-    // MARK: - Computed
+    // MARK: - Helpers
+
     var direction: Direction {
-        switch mode {
-        case .create(let dir): return dir
-        case .edit(let tx):    return tx.category.direction
-        }
+        mode.direction
     }
 
     var canSave: Bool {
-        guard category != nil,
-              !comment.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
-              Decimal(string:
-                amountString.replacingOccurrences(of: Locale.current.decimalSeparator ?? ".", with: ".")
-              ) != nil
-        else { return false }
-        return true
+        category != nil
+            && !comment.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            && Decimal(
+                string: amountString
+                    .replacingOccurrences(of: Locale.current.decimalSeparator ?? ".", with: ".")
+            ) != nil
     }
 
-    // MARK: - Save transaction
+    // MARK: - Actions
+
     func save() async {
         guard canSave,
               let cat = category,
-              let amount = Decimal(string:
-                amountString.replacingOccurrences(of: Locale.current.decimalSeparator ?? ".", with: ".")
+              let amount = Decimal(
+                  string: amountString
+                    .replacingOccurrences(of: Locale.current.decimalSeparator ?? ".", with: ".")
               )
         else { return }
 
         do {
-            // Получаем актуальный аккаунт
-            let account = try await accService.getAccount(withId: 100)
+            let account = try await accService.getAccount(withId: mode.accountId)
+            let tx = Transaction(
+                id: original?.id ?? Int(Date().timeIntervalSince1970),
+                account: account,
+                category: cat,
+                amount: amount,
+                transactionDate: date,
+                comment: comment,
+                createdAt: original?.createdAt ?? Date(),
+                updatedAt: Date()
+            )
+            let body = TransactionRequestBody(from: tx)
+
             if mode.isCreate {
-                _ = try await txService.createTransaction(
-                    accountId: account.id,
-                    categoryId: cat.id,
-                    amount: amount,
-                    date: date,
-                    comment: comment
-                )
-            } else if let original = original {
-                _ = try await txService.updateTransaction(
-                    id: original.id,
-                    accountId: account.id,
-                    categoryId: cat.id,
-                    amount: amount,
-                    date: date,
-                    comment: comment
-                )
+                _ = try await txService.createTransaction(body)
+            } else if let id = original?.id {
+                _ = try await txService.updateTransaction(id: id, with: body)
             }
+
+            NotificationCenter.default.post(
+                name: .operationsDidChange,
+                object: nil
+            )
         } catch {
-            print("Error saving transaction: \(error)")
+            self.errorWrapper = ErrorWrapper(message: error.localizedDescription)
         }
     }
 
-    // MARK: - Delete transaction
     func delete() async {
         guard case .edit(let tx) = mode else { return }
         do {
             try await txService.deleteTransaction(id: tx.id)
+            NotificationCenter.default.post(
+                name: .operationsDidChange,
+                object: nil
+            )
         } catch {
-            print("Error deleting transaction: \(error)")
+            self.errorWrapper = ErrorWrapper(message: error.localizedDescription)
         }
     }
 }

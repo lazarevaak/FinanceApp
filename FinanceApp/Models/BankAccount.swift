@@ -10,9 +10,8 @@ struct BankAccount: Codable {
     let createdAt: Date?
     let updatedAt: Date?
 
-    
+
     // MARK: - Initializers
-    //Full initializer
     init(id: Int, userId: Int, name: String, balance: Decimal, currency: String, createdAt: Date, updatedAt: Date) {
         self.id = id
         self.userId = userId
@@ -23,7 +22,6 @@ struct BankAccount: Codable {
         self.updatedAt = updatedAt
     }
 
-    // AccountBrief initializer
     init(id: Int, name: String, balance: Decimal, currency: String) {
         self.id = id
         self.name = name
@@ -74,7 +72,7 @@ struct BankAccount: Codable {
             try container.encode(id, forKey: .id)
             try container.encodeIfPresent(userId, forKey: .userId)
             try container.encode(name, forKey: .name)
-            try container.encode("\(balance)", forKey: .balance) // как строку
+            try container.encode("\(balance)", forKey: .balance) 
             try container.encode(currency, forKey: .currency)
             try container.encodeIfPresent(createdAt, forKey: .createdAt)
             try container.encodeIfPresent(updatedAt, forKey: .updatedAt)

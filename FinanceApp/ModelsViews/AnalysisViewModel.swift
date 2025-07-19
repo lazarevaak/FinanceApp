@@ -1,97 +1,95 @@
 import Foundation
+import Combine
 
-final class AnalysisViewModel {
-    private let service: TransactionsService
-    private let direction: Direction
-    private let accountId: Int
+// MARK: — Sorts
+enum SortOption: String, CaseIterable, Identifiable {
+    case byDate, byAmount
+    var id: String { rawValue }
+}
 
-    private(set) var transactions: [Transaction] = []
-    private(set) var total: Decimal = 0
-
-    var startDate: Date {
-        didSet { load() }
-    }
-    var endDate: Date {
-        didSet { load() }
-    }
-
-    var sortTitle: String = "По дате" {
-        didSet { sortTransactions() }
-    }
-
-    /// Колбэк для уведомления контроллера о том, что данные обновились
-    var onUpdate: (() -> Void)?
-
-    /// - Parameters:
-    ///   - direction: фильтр по приходу/расходу
-    ///   - accountId: идентификатор счёта, из которого берём транзакции
-    ///   - client: сетевой клиент (по умолчанию URLSessionNetworkClient с вашим токеном)
-    init(
-        direction: Direction,
-        accountId: Int,
-        client: NetworkClient = URLSessionNetworkClient()
-    ) {
-        self.direction = direction
-        self.accountId = accountId
-        self.service = TransactionsService(client: client)
-
-        let now = Date()
-        self.endDate = Calendar.current.date(
-            bySettingHour: 23, minute: 59, second: 59, of: now
-        )!
-        let oneMonthAgo = Calendar.current.date(
-            byAdding: .month, value: -1, to: now
-        )!
-        self.startDate = Calendar.current.startOfDay(for: oneMonthAgo)
-
-        load()
-    }
-
-    private func load() {
-        Task { [weak self] in
-            guard let self = self else { return }
-            do {
-                // Подгрузка всех транзакций за период
-                let all = try await service.fetchTransactions(
-                    accountId: accountId,
-                    from: startDate.startOfDay(),
-                    to: endDate.endOfDay()
-                )
-                // Фильтрация по типу (доход/расход)
-                let filtered = all.filter { $0.category.direction == self.direction }
-                let newTotal = filtered.reduce(Decimal(0)) { $0 + $1.amount }
-
-                // Обновляем на главном потоке
-                await MainActor.run {
-                    self.transactions = filtered
-                    self.total = newTotal
-                    self.sortTransactions()
-                }
-            } catch {
-                // Обработка ошибки (можно добавить onError колбэк или published-свойство)
-                print("AnalysisViewModel.load failed:", error)
-            }
-        }
-    }
-
-    private func sortTransactions() {
-        if sortTitle == "По сумме" {
-            transactions.sort { $0.amount > $1.amount }
-        } else {
-            transactions.sort { $0.transactionDate > $1.transactionDate }
-        }
-        onUpdate?()
+// MARK: — Date helpers
+private extension Date {
+    var startOfDay: Date { Calendar.current.startOfDay(for: self) }
+    var endOfDay: Date {
+        Calendar.current.date(bySettingHour: 23, minute: 59, second: 59,
+                              of: self.startOfDay)!
     }
 }
 
-private extension Date {
-    func startOfDay() -> Date {
-        Calendar.current.startOfDay(for: self)
+@MainActor
+final class AnalysisViewModel: ObservableObject {
+
+    // MARK: — Dependencies
+    private let service: TransactionsService
+    private let accountId: Int
+    private let direction: Direction
+
+    // MARK: — Published output
+    @Published private(set) var transactions: [Transaction] = []
+    @Published private(set) var total: Decimal = 0
+    @Published var isLoading  = false
+    @Published var alertError: String?
+
+    // MARK: — Input
+    @Published var startDate: Date {
+        didSet { Task { await load() } }
+    }
+    @Published var endDate: Date {
+        didSet { Task { await load() } }
+    }
+    @Published var sortOption: SortOption = .byDate {
+        didSet { applySort() }
     }
 
-    func endOfDay() -> Date {
-        Calendar.current.date(
-            bySettingHour: 23, minute: 59, second: 59, of: self
-        )!
+    var onUpdate: (() -> Void)?
+
+    // MARK: — Init
+    init(
+        client: NetworkClient = .init(token: "jkUZptMlYVqSaxWdzuQWKi1B"),
+        accountId: Int,
+        direction: Direction
+    ) {
+        self.service   = TransactionsService(client: client)
+        self.accountId = accountId
+        self.direction = direction
+
+        let now = Date()
+        self.startDate = now.startOfDay
+        self.endDate   = now.endOfDay
+
+        Task { await load() }
+    }
+
+    // MARK: — Loading
+    func load() async {
+        if startDate > endDate { endDate = startDate }
+        if endDate   < startDate { startDate = endDate }
+
+        isLoading = true
+        defer { isLoading = false }
+
+        do {
+            let fetched = try await service.getTransactions(
+                forAccount: accountId,
+                from: startDate.startOfDay,
+                to:   endDate.endOfDay
+            )
+
+            let filtered = fetched.filter { $0.category.direction == direction }
+            transactions = filtered
+            total = filtered.reduce(0) { $0 + $1.amount }
+            applySort()
+        } catch {
+            alertError = error.localizedDescription
+        }
+    }
+
+    // MARK: — Sort
+    private func applySort() {
+        switch sortOption {
+        case .byDate:   transactions.sort { $0.transactionDate > $1.transactionDate }
+        case .byAmount: transactions.sort { $0.amount          > $1.amount }
+        }
+        onUpdate?()
     }
 }

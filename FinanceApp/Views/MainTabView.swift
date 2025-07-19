@@ -7,50 +7,80 @@ struct MainTabView: View {
     private let initialAccountId: Int
 
     // MARK: - State
-    @State private var accountId: Int = 0
+    @State private var accountId: Int?
+    @State private var isLoading: Bool = true
+    @State private var alertError: ErrorWrapper?
 
-    // MARK: - Init
     // MARK: - Init
     init(client: NetworkClient, accountId: Int) {
         self.client = client
-        self.accountId = accountId
+        self.initialAccountId = accountId
+        self.accountService = BankAccountsService(client: client)
 
         let appearance = UITabBarAppearance()
         appearance.configureWithOpaqueBackground()
         appearance.backgroundColor = UIColor.white
-
         UITabBar.appearance().standardAppearance = appearance
         UITabBar.appearance().scrollEdgeAppearance = appearance
     }
 
-
+    // MARK: - Body
     var body: some View {
-        TabView {
-            TransactionsListView(direction: .outcome, accountId: accountId)
-                .tabItem { Label("Расходы", systemImage: "minus.circle") }
+        Group {
+            if let accountId = accountId {
+                TabView {
+                    TransactionsListView(direction: .outcome,
+                                         client: client,
+                                         accountId: accountId)
+                        .tabItem {
+                            Image("tab_outcome")
+                                .renderingMode(.template)
+                            Text("Расходы")
+                        }
 
-            TransactionsListView(direction: .income, accountId: accountId)
-                .tabItem { Label("Доходы", systemImage: "plus.circle") }
+                    TransactionsListView(direction: .income,
+                                         client: client,
+                                         accountId: accountId)
+                        .tabItem {
+                            Image("tab_income")
+                                .renderingMode(.template)
+                            Text("Доходы")
+                        }
 
-            AccountView(client: client, accountId: accountId)
-                .tabItem { Label("Счет", systemImage: "creditcard") }
+                    AccountView(client: client)
+                        .tabItem {
+                            Image("tab_account")
+                                .renderingMode(.template)
+                            Text("Счет")
+                        }
 
-            CategoriesView()
-                .tabItem { Label("Статьи", systemImage: "list.bullet") }
+                    CategoriesView()
+                        .tabItem {
+                            Image("tab_categories")
+                                .renderingMode(.template)
+                            Text("Статьи")
+                        }
 
-            SettingsView()
-                .tabItem { Label("Настройки", systemImage: "gear") }
+                    SettingsView()
+                        .tabItem {
+                            Image("tab_settings")
+                                .renderingMode(.template)
+                            Text("Настройки")
+                        }
+                }
+            }
         }
-        .onAppear {
-            self.accountId = initialAccountId
-        }
+        .loading(isLoading, text: "Загрузка счёта…")
+        .errorAlert(errorWrapper: $alertError)
         .task {
+            isLoading = true
             do {
                 let account = try await accountService.getAccount(withId: initialAccountId)
                 accountId = account.id
             } catch {
-                print("Ошибка загрузки: \(error.localizedDescription)")
+                alertError = ErrorWrapper(message: error.localizedDescription)
             }
+            isLoading = false
         }
     }
 }

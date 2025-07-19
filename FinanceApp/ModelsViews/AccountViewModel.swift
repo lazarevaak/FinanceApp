@@ -29,7 +29,6 @@ final class AccountViewModel: ObservableObject {
             account = acc
             selectedCurrency = Currency(rawValue: storedCurrency) ?? .ruble
             balanceInput = Self.format(acc.balance)
-            print(account?.createdAt)
         } catch {
             self.error = error
         }

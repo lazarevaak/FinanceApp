@@ -1,5 +1,4 @@
 import Foundation
-import SwiftUI
 
 // MARK: - Ошибки сети
 enum NetworkError: Error, LocalizedError {
@@ -31,20 +30,17 @@ enum NetworkError: Error, LocalizedError {
 // MARK: - Пустой тип запроса (если тело не нужно)
 struct EmptyRequest: Encodable {}
 
-
+// MARK: - NetworkClient с обработкой ошибок через NetworkError
 final class NetworkClient {
-    // MARK: - Свойства
     private let baseURL = URL(string: "https://shmr-finance.ru/api/v1")!
     private let session: URLSession
     private let token: String
 
-    // MARK: - Инициализация
     init(token: String, session: URLSession = .shared) {
         self.token = token
         self.session = session
     }
 
-    // MARK: - Метод с ответом
     func request<Request: Encodable, Response: Decodable>(
         path: String,
         method: String = "GET",
@@ -56,7 +52,6 @@ final class NetworkClient {
         return try handleResponse(data: data, response: response)
     }
 
-    // MARK: - Метод без ответа
     func request<Request: Encodable>(
         path: String,
         method: String = "GET",
@@ -68,8 +63,6 @@ final class NetworkClient {
         try validateResponse(response: response)
     }
 
-    // MARK: - Приватные вспомогательные методы
-
     private func makeRequest<Request: Encodable>(
         path: String,
         method: String,
@@ -79,9 +72,7 @@ final class NetworkClient {
         var components = URLComponents(url: baseURL.appendingPathComponent(path), resolvingAgainstBaseURL: false)
         components?.queryItems = queryItems
 
-        guard let url = components?.url else {
-            throw NetworkError.invalidURL
-        }
+        guard let url = components?.url else { throw NetworkError.invalidURL }
 
         var request = URLRequest(url: url)
         request.httpMethod = method
@@ -103,35 +94,35 @@ final class NetworkClient {
     }
 
     private func handleResponse<T: Decodable>(data: Data?, response: URLResponse) throws -> T {
-        guard let httpResponse = response as? HTTPURLResponse else {
-            throw NetworkError.invalidResponse
+        guard let http = response as? HTTPURLResponse else { throw NetworkError.invalidResponse }
+        if http.statusCode == 405 {
+            let allow = http.allHeaderFields["Allow"] as? String ?? "unknown"
+            throw NetworkError.httpError(405, "Method Not Allowed. Allowed: \(allow)")
+        }
+        guard (200..<300).contains(http.statusCode) else {
+            let msg = data.flatMap { String(data: $0, encoding: .utf8) } ?? ""
+            throw NetworkError.httpError(http.statusCode, msg)
+        }
+        guard let data = data else { throw NetworkError.invalidResponse }
+
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .custom { d in
+            let s = try d.singleValueContainer().decode(String.self)
+            if let date = ISO8601Any.date(from: s) { return date }
+            throw DecodingError.dataCorruptedError(in: try d.singleValueContainer(), debugDescription: "Bad ISO-8601: \(s)")
         }
 
-        guard (200..<300).contains(httpResponse.statusCode) else {
-            let message = data.flatMap { String(data: $0, encoding: .utf8) } ?? "Нет описания ошибки"
-            throw NetworkError.httpError(httpResponse.statusCode, message)
-        }
-
-        guard let data = data else {
-            throw NetworkError.invalidResponse
-        }
-
-        do {
-            return try JSONDecoder().decode(T.self, from: data)
-        } catch {
-            print("📛 Не удалось декодировать: \(String(data: data, encoding: .utf8) ?? "")")
+        do { return try decoder.decode(T.self, from: data) }
+        catch {
+            print("Не удалось декодировать:\n", String(data: data, encoding: .utf8) ?? "")
             throw NetworkError.decodingError
         }
     }
 
     private func validateResponse(response: URLResponse) throws {
-        guard let httpResponse = response as? HTTPURLResponse else {
-            throw NetworkError.invalidResponse
-        }
-
+        guard let httpResponse = response as? HTTPURLResponse else { throw NetworkError.invalidResponse }
         guard (200..<300).contains(httpResponse.statusCode) else {
             throw NetworkError.httpError(httpResponse.statusCode, "Пустой ответ сервера.")
         }
     }
 }
-

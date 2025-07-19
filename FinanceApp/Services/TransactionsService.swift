@@ -1,105 +1,115 @@
-// TransactionsService.swift
-
 import Foundation
 
-private struct EmptyTransactionsRequest: Encodable {}
-private struct EmptyTransactionsResponse: Decodable {}
-
-struct NewTransactionRequest: Encodable {
-    let accountId: Int
-    let categoryId: Int
-    let amount: Decimal
-    let transactionDate: String
-    let comment: String?
-}
-
-struct UpdateTransactionRequest: Encodable {
-    let id: Int
-    let accountId: Int
-    let categoryId: Int
-    let amount: Decimal
-    let transactionDate: String
-    let comment: String?
-}
-
 final class TransactionsService {
-    private let client: NetworkClient
-    private let isoFormatter = ISO8601DateFormatter()
+    // MARK: - Dependencies
+    let client: NetworkClient
+    private let fileCache: TransactionsFileCache
+    private let fileURL: URL
 
-    init(client: NetworkClient) {
+    // MARK: - Init
+    init(client: NetworkClient, fileName: String = "transactions") {
         self.client = client
+        self.fileCache = TransactionsFileCache()
+        self.fileURL = TransactionsFileCache.defaultFileURL(fileName: fileName)
+
+        try? fileCache.load(from: fileURL)
     }
 
-    /// GET /transactions?accountId=…&startDate=…&endDate=… → [Transaction]
-    func fetchTransactions(accountId: Int, from start: Date, to end: Date) async throws -> [Transaction] {
-        let items = [
-            URLQueryItem(name: "accountId", value: "\(accountId)"),
-            URLQueryItem(name: "startDate", value: isoFormatter.string(from: start)),
-            URLQueryItem(name: "endDate", value: isoFormatter.string(from: end))
+    // MARK: - Cached
+    var cachedTransactions: [Transaction] {
+        fileCache.transactions
+    }
+
+    func refreshFromCache() {
+        try? fileCache.load(from: fileURL)
+    }
+
+    // MARK: - Load
+    func getTransactions(forAccount accountId: Int, from start: Date, to end: Date) async throws -> [Transaction] {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd"
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = TimeZone(secondsFromGMT: 0)
+
+        let queryItems = [
+            URLQueryItem(name: "startDate", value: formatter.string(from: start)),
+            URLQueryItem(name: "endDate", value: formatter.string(from: end))
         ]
-        return try await client.request(
-            path: "transactions",
+
+        let path = "transactions/account/\(accountId)/period"
+
+        let txs: [Transaction] = try await client.request(
+            path: path,
             method: "GET",
-            body: nil as EmptyTransactionsRequest?,
-            queryItems: items
+            body: Optional<EmptyRequest>.none,
+            queryItems: queryItems
         )
+
+        fileCache.replaceAll(txs)
+        try? fileCache.save(to: fileURL)
+
+        return txs
     }
 
-    /// POST /transactions → Transaction
-    func createTransaction(
-        accountId: Int,
-        categoryId: Int,
-        amount: Decimal,
-        date: Date,
-        comment: String?
-    ) async throws -> Transaction {
-        let body = NewTransactionRequest(
-            accountId: accountId,
-            categoryId: categoryId,
-            amount: amount,
-            transactionDate: isoFormatter.string(from: date),
-            comment: comment
-        )
-        return try await client.request(
+    // MARK: - Create
+    func createTransaction(_ tx: TransactionRequestBody) async throws -> Transaction {
+        let response: TransactionResponseBody = try await client.request(
             path: "transactions",
             method: "POST",
-            body: body,
-            queryItems: []
+            body: tx
         )
+
+        let bankAccountsService = BankAccountsService(client: client)
+        let categoriesService = CategoriesService(client: client)
+
+        let account = try await bankAccountsService.getAccount(withId: response.accountId)
+        let category = try await categoriesService.getCategory(withId: response.categoryId)
+
+        let formatter = ISO8601DateFormatter()
+
+        let transaction = Transaction(
+            id: response.id,
+            account: account,
+            category: category,
+            amount: Decimal(string: response.amount) ?? 0,
+            transactionDate: formatter.date(from: response.transactionDate) ?? Date(),
+            comment: response.comment,
+            createdAt: formatter.date(from: response.createdAt) ?? Date(),
+            updatedAt: formatter.date(from: response.updatedAt) ?? Date()
+        )
+
+        fileCache.add(transaction)
+        try? fileCache.save(to: fileURL)
+
+        return transaction
     }
 
-    /// PUT /transactions/{id} → Transaction
-    func updateTransaction(
-        id: Int,
-        accountId: Int,
-        categoryId: Int,
-        amount: Decimal,
-        date: Date,
-        comment: String?
-    ) async throws -> Transaction {
-        let body = UpdateTransactionRequest(
-            id: id,
-            accountId: accountId,
-            categoryId: categoryId,
-            amount: amount,
-            transactionDate: isoFormatter.string(from: date),
-            comment: comment
-        )
-        return try await client.request(
+
+
+    // MARK: - Update
+    func updateTransaction(id: Int, with tx: TransactionRequestBody) async throws -> Transaction {
+        let updated: Transaction = try await client.request(
             path: "transactions/\(id)",
             method: "PUT",
-            body: body,
-            queryItems: []
+            body: tx
         )
+
+        fileCache.remove(withId: id)
+        fileCache.add(updated)
+        try? fileCache.save(to: fileURL)
+
+        return updated
     }
 
-    /// DELETE /transactions/{id}
+    // MARK: - Delete
     func deleteTransaction(id: Int) async throws {
-        try await client.request(
+        _ = try await client.request(
             path: "transactions/\(id)",
             method: "DELETE",
-            body: nil as EmptyTransactionsRequest?,
-            queryItems: []
-        )
+            body: EmptyRequest()
+        ) as Void
+
+        fileCache.remove(withId: id)
+        try? fileCache.save(to: fileURL)
     }
 }
