@@ -1,16 +1,21 @@
-import UIKit
 import Combine
+import PieChart
+import UIKit
+import SwiftUI
 
 final class AnalysisViewController: UIViewController {
 
+    // MARK: — Callbacks
     var onBack: (() -> Void)?
 
+    // MARK: — Properties
     private let viewModel: AnalysisViewModel
     private var bag = Set<AnyCancellable>()
 
     private let startDatePicker = UIDatePicker()
     private let endDatePicker   = UIDatePicker()
     private let sumLabel        = UILabel()
+    private let pieChartView    = PieChartView()
     private let tableView       = UITableView(frame: .zero, style: .plain)
     private let sortControl: UISegmentedControl = {
         let c = UISegmentedControl(items: ["По дате", "По сумме"])
@@ -21,23 +26,36 @@ final class AnalysisViewController: UIViewController {
         return c
     }()
 
+    private let activityIndicator = UIActivityIndicatorView(style: .large)
+
+    // MARK: — Init
     init(direction: Direction,
          accountId: Int,
          client: NetworkClient) {
-        self.viewModel = AnalysisViewModel(client: client,
-                                           accountId: accountId,
-                                           direction: direction)
+        self.viewModel = AnalysisViewModel(
+            client: client,
+            accountId: accountId,
+            direction: direction
+        )
         super.init(nibName: nil, bundle: nil)
     }
-    required init?(coder: NSCoder) { fatalError() }
+    required init?(coder: NSCoder) { fatalError("init(coder:) not implemented") }
 
+    // MARK: — Lifecycle
     override func viewDidLoad() {
         super.viewDidLoad()
         view.backgroundColor = .systemGroupedBackground
-        view.tintColor = .black
+        view.tintColor = UIColor(named: "IconColor")
+
         setupHeader()
         setupSubviews()
+        setupActivityIndicator()
         bindVM()
+
+        let initialData: [PieChart.Entity] = viewModel.chartEntities.map {
+            PieChart.Entity(value: $0.value, label: $0.label)
+        }
+        pieChartView.entities = initialData
     }
 
     override func viewWillAppear(_ animated: Bool) {
@@ -45,7 +63,7 @@ final class AnalysisViewController: UIViewController {
         navigationController?.setNavigationBarHidden(true, animated: false)
     }
 
-    // MARK: Header
+    // MARK: — Header
     private func setupHeader() {
         let back = UIButton(type: .system)
         back.setTitle("Назад", for: .normal)
@@ -78,7 +96,7 @@ final class AnalysisViewController: UIViewController {
     }
     @objc private func didTapBack() { onBack?() }
 
-    // MARK: Subviews
+    // MARK: — Subviews
     private func setupSubviews() {
         [startDatePicker, endDatePicker].forEach {
             $0.datePickerMode = .date
@@ -91,7 +109,7 @@ final class AnalysisViewController: UIViewController {
         let periodStack = UIStackView(arrangedSubviews: [
             row("Период: начало", pickerContainer(startDatePicker)),
             sep(),
-            row("Период: конец",  pickerContainer(endDatePicker)),
+            row("Период: конец", pickerContainer(endDatePicker)),
             sep(),
             row("Сортировка", sortControl),
             sep(),
@@ -102,6 +120,9 @@ final class AnalysisViewController: UIViewController {
         periodStack.layer.cornerRadius = 12
         periodStack.backgroundColor = .systemBackground
         periodStack.translatesAutoresizingMaskIntoConstraints = false
+
+        pieChartView.translatesAutoresizingMaskIntoConstraints = false
+        pieChartView.backgroundColor = .systemGroupedBackground
 
         let opsHeader = UILabel()
         opsHeader.text = "ОПЕРАЦИИ"
@@ -114,12 +135,13 @@ final class AnalysisViewController: UIViewController {
         tableView.dataSource = self
         tableView.delegate   = self
         tableView.backgroundColor = .clear
-        tableView.separatorInset = UIEdgeInsets(top: 0, left: 40, bottom: 0, right: 0)
+        tableView.separatorInset  = UIEdgeInsets(top: 0, left: 40, bottom: 0, right: 0)
         tableView.layer.cornerRadius = 12
-        tableView.clipsToBounds = true
+        tableView.clipsToBounds      = true
         tableView.translatesAutoresizingMaskIntoConstraints = false
 
         view.addSubview(periodStack)
+        view.addSubview(pieChartView)
         view.addSubview(opsHeader)
         view.addSubview(tableView)
 
@@ -128,7 +150,12 @@ final class AnalysisViewController: UIViewController {
             periodStack.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 16),
             periodStack.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -16),
 
-            opsHeader.topAnchor.constraint(equalTo: periodStack.bottomAnchor, constant: 16),
+            pieChartView.topAnchor.constraint(equalTo: periodStack.bottomAnchor, constant: 16),
+            pieChartView.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 16),
+            pieChartView.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -16),
+            pieChartView.heightAnchor.constraint(equalToConstant: 200),
+
+            opsHeader.topAnchor.constraint(equalTo: pieChartView.bottomAnchor, constant: 16),
             opsHeader.leadingAnchor.constraint(equalTo: periodStack.leadingAnchor),
 
             tableView.topAnchor.constraint(equalTo: opsHeader.bottomAnchor, constant: 8),
@@ -152,6 +179,7 @@ final class AnalysisViewController: UIViewController {
         ])
         return container
     }
+
     private func row(_ title: String, _ ctrl: UIView) -> UIStackView {
         let label = UILabel()
         label.text = title
@@ -168,6 +196,7 @@ final class AnalysisViewController: UIViewController {
         row.heightAnchor.constraint(equalToConstant: 52).isActive = true
         return row
     }
+
     private func sep() -> UIView {
         let v = UIView()
         v.backgroundColor = UIColor.systemGray4.withAlphaComponent(0.6)
@@ -175,23 +204,51 @@ final class AnalysisViewController: UIViewController {
         return v
     }
 
-    // MARK: Binding
+    private func setupActivityIndicator() {
+        activityIndicator.hidesWhenStopped = true
+        view.addSubview(activityIndicator)
+        activityIndicator.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            activityIndicator.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+            activityIndicator.centerYAnchor.constraint(equalTo: view.centerYAnchor)
+        ])
+    }
+
     private func bindVM() {
         startDatePicker.date = viewModel.startDate
         endDatePicker.date   = viewModel.endDate
         updateSum()
 
         viewModel.onUpdate = { [weak self] in
-            self?.updateSum()
-            self?.tableView.reloadData()
+            guard let self = self else { return }
+            self.updateSum()
+
+            let newData: [PieChart.Entity] = self.viewModel.chartEntities.map {
+                PieChart.Entity(value: $0.value, label: $0.label)
+            }
+            self.pieChartView.animateTransition(to: newData, duration: 1.0)
+            self.tableView.reloadData()
         }
 
         viewModel.$alertError
             .compactMap { $0 }
             .sink { [weak self] msg in
-                let alert = UIAlertController(title: "Ошибка", message: msg, preferredStyle: .alert)
-                alert.addAction(UIAlertAction(title: "OK", style: .default))
+                let alert = UIAlertController(
+                    title: "Ошибка",
+                    message: msg,
+                    preferredStyle: .alert
+                )
+                alert.addAction(.init(title: "OK", style: .default))
                 self?.present(alert, animated: true)
+            }
+            .store(in: &bag)
+
+        viewModel.$isLoading
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] loading in
+                loading
+                    ? self?.activityIndicator.startAnimating()
+                    : self?.activityIndicator.stopAnimating()
             }
             .store(in: &bag)
     }
@@ -201,12 +258,11 @@ final class AnalysisViewController: UIViewController {
         let fmt = NumberFormatter()
         fmt.numberStyle = .currency
         fmt.currencyCode = code
-        fmt.locale = Locale(identifier: "ru_RU")
+        fmt.locale       = Locale.current
         fmt.maximumFractionDigits = 0
-        sumLabel.text = fmt.string(from: viewModel.total as NSDecimalNumber)
+        sumLabel.text    = fmt.string(from: viewModel.total as NSDecimalNumber)
     }
 
-    // MARK: Actions
     @objc private func dateChanged(_ sender: UIDatePicker) {
         if sender == startDatePicker {
             viewModel.startDate = sender.date
@@ -214,21 +270,26 @@ final class AnalysisViewController: UIViewController {
             viewModel.endDate = sender.date
         }
     }
+
     @objc private func sortChanged(_ sender: UISegmentedControl) {
         viewModel.sortOption = sender.selectedSegmentIndex == 1 ? .byAmount : .byDate
     }
 }
 
-// MARK: UITableViewDataSource / UITableViewDelegate
+// MARK: — UITableViewDataSource / UITableViewDelegate
 extension AnalysisViewController: UITableViewDataSource, UITableViewDelegate {
     func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
         viewModel.transactions.count
     }
-    func tableView(_ tv: UITableView,
+
+    func tableView(_ tableView: UITableView,
                    cellForRowAt indexPath: IndexPath) -> UITableViewCell {
-        let cell = tv.dequeueReusableCell(withIdentifier: AnalysisCell.reuseIdentifier,
-                                          for: indexPath) as! AnalysisCell
-        let tx = viewModel.transactions[indexPath.row]
+        let cell = tableView.dequeueReusableCell(
+            withIdentifier: AnalysisCell.reuseIdentifier,
+            for: indexPath
+        ) as! AnalysisCell
+
+        let tx   = viewModel.transactions[indexPath.row]
         let code = UserDefaults.standard.string(forKey: "currencyCode") ?? "RUB"
         cell.configure(with: tx, total: viewModel.total, currencyCode: code)
         return cell

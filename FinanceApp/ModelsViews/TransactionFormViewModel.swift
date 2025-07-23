@@ -65,7 +65,7 @@ final class TransactionFormViewModel: ObservableObject {
 
         Task {
             do {
-                let account = try await self.accService.getAccount(withId: self.mode.accountId)
+                _ = try await self.accService.getAccount(withId: self.mode.accountId)
                 let allTx = try await self.txService.getTransactions(
                     forAccount: self.mode.accountId,
                     from: .distantPast,
