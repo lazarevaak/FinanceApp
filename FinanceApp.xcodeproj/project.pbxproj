@@ -6,6 +6,11 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		A84644852E2FC16200220858 /* PieChart in Frameworks */ = {isa = PBXBuildFile; productRef = A84644842E2FC16200220858 /* PieChart */; };
+		A84645112E30F1C100220858 /* Utilities in Resources */ = {isa = PBXBuildFile; fileRef = A84644EA2E30F1C100220858 /* Utilities */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXContainerItemProxy section */
 		A8742EF42DFCF6EB00145489 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -17,6 +22,7 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		A84644EA2E30F1C100220858 /* Utilities */ = {isa = PBXFileReference; lastKnownFileType = wrapper; path = Utilities; sourceTree = "<group>"; };
 		A8742EB32DFCF31100145489 /* FinanceApp.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = FinanceApp.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		A8742EF02DFCF6EA00145489 /* FinanceAppTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = FinanceAppTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
@@ -39,6 +45,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				A84644852E2FC16200220858 /* PieChart in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -57,6 +64,7 @@
 			children = (
 				A8742EB52DFCF31100145489 /* FinanceApp */,
 				A8742EF12DFCF6EA00145489 /* FinanceAppTests */,
+				A84644EA2E30F1C100220858 /* Utilities */,
 				A8742EB42DFCF31100145489 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -90,6 +98,7 @@
 			);
 			name = FinanceApp;
 			packageProductDependencies = (
+				A84644842E2FC16200220858 /* PieChart */,
 			);
 			productName = FinanceApp;
 			productReference = A8742EB32DFCF31100145489 /* FinanceApp.app */;
@@ -148,6 +157,9 @@
 			);
 			mainGroup = A8742EAA2DFCF31100145489;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				A84644AF2E2FC25800220858 /* XCLocalSwiftPackageReference "FinanceApp/Utilities" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = A8742EB42DFCF31100145489 /* Products */;
 			projectDirPath = "";
@@ -164,6 +176,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				A84645112E30F1C100220858 /* Utilities in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -452,6 +465,20 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCLocalSwiftPackageReference section */
+		A84644AF2E2FC25800220858 /* XCLocalSwiftPackageReference "FinanceApp/Utilities" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = FinanceApp/Utilities;
+		};
+/* End XCLocalSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		A84644842E2FC16200220858 /* PieChart */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = PieChart;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = A8742EAB2DFCF31100145489 /* Project object */;
 }

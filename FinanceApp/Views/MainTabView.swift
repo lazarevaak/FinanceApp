@@ -10,6 +10,7 @@ struct MainTabView: View {
     @State private var accountId: Int?
     @State private var isLoading: Bool = true
     @State private var alertError: ErrorWrapper?
+    @StateObject private var networkObserver = NetworkStatusObserver()
 
     // MARK: - Init
     init(client: NetworkClient, accountId: Int) {
@@ -26,52 +27,58 @@ struct MainTabView: View {
 
     // MARK: - Body
     var body: some View {
-        Group {
-            if let accountId = accountId {
-                TabView {
-                    TransactionsListView(direction: .outcome,
-                                         client: client,
-                                         accountId: accountId)
-                        .tabItem {
-                            Image("tab_outcome")
-                                .renderingMode(.template)
-                            Text("Расходы")
-                        }
+        ZStack(alignment: .bottom) {
+            Group {
+                if let accountId = accountId {
+                    TabView {
+                        TransactionsListView(direction: .outcome,
+                                             client: client,
+                                             accountId: accountId)
+                            .tabItem {
+                                Image("tab_outcome").renderingMode(.template)
+                                Text("Расходы")
+                            }
 
-                    TransactionsListView(direction: .income,
-                                         client: client,
-                                         accountId: accountId)
-                        .tabItem {
-                            Image("tab_income")
-                                .renderingMode(.template)
-                            Text("Доходы")
-                        }
+                        TransactionsListView(direction: .income,
+                                             client: client,
+                                             accountId: accountId)
+                            .tabItem {
+                                Image("tab_income").renderingMode(.template)
+                                Text("Доходы")
+                            }
 
-                    AccountView(client: client)
-                        .tabItem {
-                            Image("tab_account")
-                                .renderingMode(.template)
-                            Text("Счет")
-                        }
+                        AccountView(client: client)
+                            .tabItem {
+                                Image("tab_account").renderingMode(.template)
+                                Text("Счет")
+                            }
 
-                    CategoriesView()
-                        .tabItem {
-                            Image("tab_categories")
-                                .renderingMode(.template)
-                            Text("Статьи")
-                        }
+                        CategoriesView()
+                            .tabItem {
+                                Image("tab_categories").renderingMode(.template)
+                                Text("Статьи")
+                            }
 
-                    SettingsView()
-                        .tabItem {
-                            Image("tab_settings")
-                                .renderingMode(.template)
-                            Text("Настройки")
-                        }
+                        SettingsView()
+                            .tabItem {
+                                Image("tab_settings").renderingMode(.template)
+                                Text("Настройки")
+                            }
+                    }
                 }
             }
+            .loading(isLoading, text: "Загрузка счёта…")
+            .errorAlert(errorWrapper: $alertError)
+
+            if !networkObserver.isConnected {
+                OfflineBanner()
+                    .transition(.move(edge: .bottom))
+                    .animation(.easeInOut(duration: 0.3), value: networkObserver.isConnected)
+                    .padding(.bottom, UIApplication.shared.windows.first?.safeAreaInsets.bottom ?? 0)
+                    .zIndex(1)
+            }
         }
-        .loading(isLoading, text: "Загрузка счёта…")
-        .errorAlert(errorWrapper: $alertError)
+        .edgesIgnoringSafeArea(.bottom)
         .task {
             isLoading = true
             do {

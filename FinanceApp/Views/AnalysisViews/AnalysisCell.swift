@@ -93,7 +93,7 @@ final class AnalysisCell: UITableViewCell {
         let formatter = NumberFormatter()
         formatter.numberStyle = .currency
         formatter.currencyCode = currencyCode
-        formatter.locale = Locale(identifier: "ru_RU")
+        formatter.locale = Locale.current
         formatter.maximumFractionDigits = 0
         formatter.minimumFractionDigits = 0
 
