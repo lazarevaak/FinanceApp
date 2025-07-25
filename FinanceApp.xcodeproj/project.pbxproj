@@ -9,6 +9,8 @@
 /* Begin PBXBuildFile section */
 		A84644852E2FC16200220858 /* PieChart in Frameworks */ = {isa = PBXBuildFile; productRef = A84644842E2FC16200220858 /* PieChart */; };
 		A84645112E30F1C100220858 /* Utilities in Resources */ = {isa = PBXBuildFile; fileRef = A84644EA2E30F1C100220858 /* Utilities */; };
+		A84645552E318F8500220858 /* Lottie-Dynamic in Frameworks */ = {isa = PBXBuildFile; productRef = A84645542E318F8500220858 /* Lottie-Dynamic */; };
+		A84645562E323A6D00220858 /* Lottie-Dynamic in Embed Frameworks */ = {isa = PBXBuildFile; productRef = A84645542E318F8500220858 /* Lottie-Dynamic */; settings = {ATTRIBUTES = (CodeSignOnCopy, ); }; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -20,6 +22,20 @@
 			remoteInfo = FinanceApp;
 		};
 /* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		A84645572E323A6D00220858 /* Embed Frameworks */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 10;
+			files = (
+				A84645562E323A6D00220858 /* Lottie-Dynamic in Embed Frameworks */,
+			);
+			name = "Embed Frameworks";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
 		A84644EA2E30F1C100220858 /* Utilities */ = {isa = PBXFileReference; lastKnownFileType = wrapper; path = Utilities; sourceTree = "<group>"; };
@@ -46,6 +62,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				A84644852E2FC16200220858 /* PieChart in Frameworks */,
+				A84645552E318F8500220858 /* Lottie-Dynamic in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -88,6 +105,7 @@
 				A8742EAF2DFCF31100145489 /* Sources */,
 				A8742EB02DFCF31100145489 /* Frameworks */,
 				A8742EB12DFCF31100145489 /* Resources */,
+				A84645572E323A6D00220858 /* Embed Frameworks */,
 			);
 			buildRules = (
 			);
@@ -99,6 +117,7 @@
 			name = FinanceApp;
 			packageProductDependencies = (
 				A84644842E2FC16200220858 /* PieChart */,
+				A84645542E318F8500220858 /* Lottie-Dynamic */,
 			);
 			productName = FinanceApp;
 			productReference = A8742EB32DFCF31100145489 /* FinanceApp.app */;
@@ -159,6 +178,7 @@
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
 				A84644AF2E2FC25800220858 /* XCLocalSwiftPackageReference "FinanceApp/Utilities" */,
+				A846454F2E318BE300220858 /* XCRemoteSwiftPackageReference "lottie-ios" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = A8742EB42DFCF31100145489 /* Products */;
@@ -473,10 +493,26 @@
 		};
 /* End XCLocalSwiftPackageReference section */
 
+/* Begin XCRemoteSwiftPackageReference section */
+		A846454F2E318BE300220858 /* XCRemoteSwiftPackageReference "lottie-ios" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/airbnb/lottie-ios.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 4.5.2;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
 /* Begin XCSwiftPackageProductDependency section */
 		A84644842E2FC16200220858 /* PieChart */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = PieChart;
+		};
+		A84645542E318F8500220858 /* Lottie-Dynamic */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = A846454F2E318BE300220858 /* XCRemoteSwiftPackageReference "lottie-ios" */;
+			productName = "Lottie-Dynamic";
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

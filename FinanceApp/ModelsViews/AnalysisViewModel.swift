@@ -2,12 +2,6 @@ import Foundation
 import Combine
 import PieChart
 
-// MARK: — Сортировка
-enum SortOption: String, CaseIterable, Identifiable {
-    case byDate, byAmount
-    var id: String { rawValue }
-}
-
 @MainActor
 final class AnalysisViewModel: ObservableObject {
 
@@ -23,7 +17,7 @@ final class AnalysisViewModel: ObservableObject {
     @Published var alertError: String?
     @Published var startDate: Date { didSet { Task { await load() } } }
     @Published var endDate: Date   { didSet { Task { await load() } } }
-    @Published var sortOption: SortOption = .byDate { didSet { applySort() } }
+    @Published var sortOption: SortOptionEnum = .byDate { didSet { applySort() } }
 
     /// Коллбек для обновления экрана
     var onUpdate: (() -> Void)?
