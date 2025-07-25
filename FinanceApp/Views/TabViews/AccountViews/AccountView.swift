@@ -1,5 +1,6 @@
 import SwiftUI
 import UIKit
+import Charts
 
 extension Notification.Name {
     static let operationsDidChange = Notification.Name("operationsDidChange")
@@ -21,42 +22,26 @@ struct AccountView: View {
     var body: some View {
         NavigationView {
             VStack(spacing: 16) {
-                Text("Мой счёт")
-                    .font(.largeTitle.bold())
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal, 16)
+                header
 
                 ScrollView {
-                    VStack(spacing: 8) {
+                    VStack(spacing: 12) {
                         balanceRow
                         currencyRow
-                            .onTapGesture {
-                                if vm.isEditing {
-                                    showCurrencyDialog = true
-                                }
-                            }
+                        chartSection
                     }
                     .padding(.horizontal, 16)
                     .padding(.top, 16)
                 }
-                .refreshable { await vm.loadAccount() }
+                .refreshable {
+                    await vm.loadAccount()
+                }
             }
             .background(Color(.systemGroupedBackground).ignoresSafeArea())
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button(vm.isEditing ? "Сохранить" : "Редактировать") {
-                        if vm.isEditing {
-                            UIApplication.shared.sendAction(
-                                #selector(UIResponder.resignFirstResponder),
-                                to: nil, from: nil, for: nil
-                            )
-                            hideBalance = true
-                        }
-                        vm.toggleEditing()
-                        isFocused = false
-                    }
-                    .foregroundColor(Color(.black))
+                    editButton
                 }
             }
             .confirmationDialog("Валюта", isPresented: $showCurrencyDialog, titleVisibility: .visible) {
@@ -64,10 +49,9 @@ struct AccountView: View {
                     Button(cur.displayName) {
                         vm.selectedCurrency = cur
                     }
-                    .foregroundColor(Color(.black))
                 }
             }
-            .tint(Color(.black))
+            .tint(.black)
             .gesture(
                 DragGesture().onChanged { _ in
                     UIApplication.shared.sendAction(
@@ -76,23 +60,16 @@ struct AccountView: View {
                     )
                 }
             )
-            .onReceive(NotificationCenter.default.publisher(for: .deviceDidShake)) { _ in
-                withAnimation { hideBalance.toggle() }
-            }
             .overlay(
                 ShakeDetectorView()
                     .allowsHitTesting(false)
                     .id(vm.isEditing)
             )
         }
-        .onChange(of: vm.isEditing) { _, editing in
-            if !editing { hideBalance = true }
-        }
-        .alert("Ошибка", isPresented: Binding(get: {
-            vm.error != nil
-        }, set: { _ in
-            vm.error = nil
-        })) {
+        .alert("Ошибка", isPresented: Binding(
+            get: { vm.error != nil },
+            set: { _ in vm.error = nil }
+        )) {
             Button("Ок", role: .cancel) {}
         } message: {
             Text(vm.error?.localizedDescription ?? "Неизвестная ошибка")
@@ -105,12 +82,19 @@ struct AccountView: View {
         }
     }
 
-    // MARK: Balance Row
+    // MARK: — Subviews
+
+    private var header: some View {
+        Text("Мой счёт")
+            .font(.largeTitle.bold())
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 16)
+    }
+
     private var balanceRow: some View {
         HStack {
             Text("💰 Баланс")
             Spacer()
-
             if vm.isEditing {
                 TextField("", text: $vm.balanceInput)
                     .keyboardType(.decimalPad)
@@ -125,28 +109,23 @@ struct AccountView: View {
                         .locale(Locale(identifier: "ru_RU"))
                         .precision(.fractionLength(0))
                 ) ?? "—")
-                .foregroundColor(.black)
                 .spoiler(isOn: $hideBalance)
             }
         }
         .padding(12)
         .frame(maxWidth: .infinity)
-        .background(
-            vm.isEditing ? Color(.systemBackground) : Color.accentColor
-        )
+        .background(vm.isEditing ? Color(.systemBackground) : Color.accentColor)
         .clipShape(RoundedRectangle(cornerRadius: 12))
         .contentShape(Rectangle())
         .onTapGesture { if vm.isEditing { isFocused = true } }
     }
 
-    // MARK: Currency Row
     private var currencyRow: some View {
         HStack {
             Text("Валюта")
             Spacer()
             Text(vm.selectedCurrency.symbol)
-                .foregroundColor(vm.isEditing ? Color(.black) : .primary)
-
+                .foregroundColor(vm.isEditing ? .black : .primary)
             if vm.isEditing {
                 Image(systemName: "chevron.right")
                     .foregroundColor(.gray)
@@ -154,11 +133,53 @@ struct AccountView: View {
         }
         .padding(12)
         .frame(maxWidth: .infinity)
-        .background(
-            vm.isEditing
-            ? Color(.systemBackground)
-            : Color.accentColor.opacity(0.20)
-        )
+        .background(vm.isEditing
+                    ? Color(.systemBackground)
+                    : Color.accentColor.opacity(0.20))
         .clipShape(RoundedRectangle(cornerRadius: 12))
+        .onTapGesture {
+            if vm.isEditing { showCurrencyDialog = true }
+        }
+    }
+
+    private var chartSection: some View {
+        Group {
+            if !vm.isEditing {
+                Picker("", selection: $vm.selectedChartMode) {
+                    ForEach(AccountViewModel.ChartMode.allCases) { mode in
+                        Text(mode.rawValue).tag(mode)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .padding(.horizontal, 16)
+                .onChange(of: vm.selectedChartMode) { _ in
+                    handleChartModeChange()
+                }
+
+                BalanceChartView(entries: vm.balanceEntries)
+                    .transition(.opacity.combined(with: .slide))
+                    .animation(.easeInOut, value: vm.balanceEntries)
+            }
+        }
+    }
+
+    private var editButton: some View {
+        Button(vm.isEditing ? "Сохранить" : "Редактировать") {
+            UIApplication.shared.sendAction(
+                #selector(UIResponder.resignFirstResponder),
+                to: nil, from: nil, for: nil
+            )
+            hideBalance = true
+            vm.toggleEditing()
+            isFocused = false
+        }
+        .foregroundColor(.black)
+    }
+
+    // MARK: — Actions
+    private func handleChartModeChange() {
+        withAnimation(.easeInOut) {
+            Task { await vm.loadAccount() }
+        }
     }
 }
